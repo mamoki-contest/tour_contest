@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>한사나다 · 구조 와이어프레임 (흑백)</title>
+<style>
+  /* ===== 흑백 lo-fi 규약: 색 금지, 회색조만. 타입 3단(20/14/12). 위계는 크기·여백으로. ===== */
+  :root{
+    --ink:#222; --mid:#666; --faint:#999;
+    --line:#999; --line-soft:#CCC;
+    --fill-0:#FFF; --fill-1:#F2F2F2; --fill-2:#E4E4E4; --fill-3:#D0D0D0; --fill-4:#B4B4B4; --fill-5:#8E8E8E;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--sans);color:var(--ink);background:var(--fill-1);word-break:keep-all;overflow-wrap:break-word}
+
+  /* --- 셸 --- */
+  .shell{display:grid;grid-template-columns:270px minmax(0,1fr);min-height:100vh}
+  .side{background:var(--fill-0);border-right:1px solid var(--line-soft);padding:20px 16px;position:sticky;top:0;height:100vh;overflow:auto}
+  .side h1{font-size:20px;line-height:1.35;font-weight:700;margin:0 0 4px}
+  .side .meta{font-size:12px;line-height:1.6;color:var(--mid);margin:0 0 16px}
+  .side .grp{font-size:12px;font-weight:700;color:var(--mid);margin:16px 0 6px;text-transform:uppercase;letter-spacing:.04em}
+  .side button{display:block;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:4px;
+    font-family:var(--sans);font-size:12px;line-height:1.5;color:var(--ink);padding:6px 8px;cursor:pointer}
+  .side button:hover{background:var(--fill-1)}
+  .side button[aria-current="true"]{background:var(--fill-2);border-color:var(--line);font-weight:700}
+  .side .note{font-size:12px;line-height:1.6;color:var(--mid);margin-top:20px;padding-top:16px;border-top:1px solid var(--line-soft)}
+
+  .stage{padding:24px 24px 80px;overflow:auto}
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .bar h2{font-size:20px;line-height:1.35;font-weight:700;margin:0}
+  .bar .tag{font-family:var(--mono);font-size:12px;color:var(--mid);border:1px solid var(--line-soft);border-radius:4px;padding:2px 6px}
+  .bar .nav{margin-left:auto;display:flex;gap:8px}
+  .bar .nav button{font-family:var(--sans);font-size:12px;padding:6px 12px;border:1px solid var(--line);background:var(--fill-0);border-radius:4px;cursor:pointer}
+  .desc{font-size:12px;line-height:1.7;color:var(--mid);margin:0 0 16px;max-width:76ch}
+  .desc b{color:var(--ink)}
+  .warnline{font-size:12px;line-height:1.7;border:1px dashed var(--line);background:var(--fill-1);padding:8px 10px;border-radius:4px;margin:0 0 16px;max-width:76ch}
+
+  /* --- 화면 프레임 --- */
+  .screen[hidden]{display:none!important}
+  .frame{background:var(--fill-0);border:1px solid var(--line);position:relative}
+  .frame.mob{width:375px;height:760px;overflow:hidden}
+  .frame.desk{width:1120px;max-width:100%;min-height:660px}
+
+  /* --- 컴포넌트 이름표 --- */
+  .cn{font-family:var(--mono);font-size:9px;line-height:1.2;color:var(--faint);display:block;margin-bottom:2px}
+  .box{border:1px solid var(--line-soft);background:var(--fill-1);padding:8px;margin-bottom:8px}
+  .box.dash{border-style:dashed;background:var(--fill-0)}
+  .t-l{font-size:20px;line-height:1.35;font-weight:700}
+  .t-m{font-size:14px;line-height:1.5;font-weight:600}
+  .t-s{font-size:12px;line-height:1.6;font-weight:400;color:var(--mid)}
+
+  /* --- 지도 --- */
+  .map{position:absolute;inset:0;background:var(--fill-0);overflow:hidden}
+  .map .grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr;height:100%}
+  .map .grid div{border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink)}
+  .lv1{background:var(--fill-1)} .lv2{background:var(--fill-2)} .lv3{background:var(--fill-3)} .lv4{background:var(--fill-4)}
+  .nodata{background:repeating-linear-gradient(45deg,var(--fill-0),var(--fill-0) 4px,var(--fill-3) 4px,var(--fill-3) 8px)}
+  .pill{background:var(--fill-0);border:1px solid var(--line);border-radius:999px;padding:2px 8px;font-size:10px;font-weight:600}
+
+  /* --- 지도 위 플로팅 --- */
+  .topbar{position:absolute;left:12px;right:12px;top:12px;z-index:5}
+  .topbar .sf{border:1px solid var(--line);background:var(--fill-0);padding:9px 10px;font-size:12px;color:var(--mid);display:flex;justify-content:space-between}
+  .condrow{display:flex;gap:6px;margin-top:6px;overflow-x:auto;scrollbar-width:none}
+  .condrow::-webkit-scrollbar{display:none}
+  .cond{flex:0 0 auto;border:1px solid var(--line);background:var(--fill-0);font-size:11px;padding:4px 8px;white-space:nowrap}
+  .cond.reset{border-style:dashed;color:var(--mid)}
+  .mapcta{position:absolute;left:50%;transform:translateX(-50%);top:118px;z-index:5;border:1px solid var(--line);background:var(--fill-0);font-size:11px;font-weight:600;padding:7px 12px}
+  .legend{position:absolute;left:12px;z-index:5;border:1px solid var(--line);background:var(--fill-0);padding:8px;width:186px}
+  .legend .sc{display:flex;gap:2px;margin:4px 0}
+  .legend .sc i{width:22px;height:8px;border:1px solid var(--line-soft);display:block}
+
+  /* --- 바텀시트 --- */
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--fill-0);border-top:2px solid var(--line);z-index:6;display:flex;flex-direction:column}
+  .sheet .handle{width:36px;height:4px;background:var(--line);border-radius:2px;margin:8px auto}
+  .sheet .shead{padding:0 12px 8px;border-bottom:1px solid var(--line-soft)}
+  .sheet .sbody{padding:10px 12px 60px;overflow:auto;flex:1}
+  .sheet.peek{height:120px} .sheet.mid{height:56%} .sheet.full{height:calc(100% - 56px)}
+  .headrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .seg{display:inline-flex;border:1px solid var(--line)}
+  .seg span{font-size:11px;padding:5px 8px;border-right:1px solid var(--line)}
+  .seg span:last-child{border-right:0}
+  .seg span[data-on]{background:var(--fill-3);font-weight:700}
+
+  /* --- 카드 --- */
+  .card{border:1px solid var(--line);background:var(--fill-0);padding:10px;margin-bottom:12px;position:relative}
+  .card .thumb{height:96px;border:1px dashed var(--line-soft);background:var(--fill-1);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--faint);margin-bottom:8px}
+  .card .ttl{font-size:14px;line-height:1.5;font-weight:600;margin:0;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .card .addr{font-size:12px;line-height:1.6;color:var(--mid);margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .cap{font-size:12px;line-height:1.6;color:var(--mid);margin:8px 0 0}
+  .savebtn{position:absolute;right:10px;top:10px;width:32px;height:32px;border-radius:999px;border:1px solid var(--line);background:var(--fill-0);font-size:11px;display:flex;align-items:center;justify-content:center}
+  .savebtn.on{background:var(--fill-3);font-weight:700}
+  .bdg{display:inline-block;border:1px solid var(--line);font-size:11px;padding:3px 7px;margin:8px 6px 0 0}
+  .bdg.quiet{background:var(--fill-2);font-weight:700}
+  .bdg.normal{background:var(--fill-1)}
+  .bdg.busy{background:var(--fill-3)}
+  .bdg.nodata{border-style:dashed;background:var(--fill-0);color:var(--mid)}
+  .qdate{font-size:20px;line-height:1.35;font-weight:700;margin:8px 0 0}
+
+  .divider{height:1px;background:var(--line-soft);margin:16px 0}
+  .skel{border:1px solid var(--line-soft);background:var(--fill-1);margin-bottom:8px}
+  .state{border:1px dashed var(--line);background:var(--fill-1);padding:16px;text-align:center}
+  .state .t-m{margin-bottom:10px}
+  .btn{display:inline-block;border:1px solid var(--line);background:var(--fill-0);font-size:12px;font-weight:600;padding:9px 14px}
+  .btn.pri{background:var(--fill-3);font-weight:700}
+  .btn.dis{color:var(--faint);border-color:var(--line-soft);background:var(--fill-1)}
+  .btn.block{display:block;width:100%;text-align:center}
+
+  .bnav{position:absolute;left:0;right:0;bottom:0;height:52px;background:var(--fill-0);border-top:1px solid var(--line);display:flex;z-index:7}
+  .bnav div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;color:var(--mid);position:relative}
+  .bnav div[data-on]{color:var(--ink);font-weight:700;border-top:2px solid var(--ink);margin-top:-1px}
+  .bnav .cnt{position:absolute;top:6px;left:calc(50% + 14px);border:1px solid var(--line);background:var(--fill-3);border-radius:999px;font-size:9px;padding:0 4px;font-weight:700}
+
+  /* --- 상세 --- */
+  .det{height:100%;overflow:auto;padding:0 0 76px}
+  .det .topback{position:sticky;top:0;background:var(--fill-0);border-bottom:1px solid var(--line-soft);padding:10px 12px;font-size:12px;font-weight:600;z-index:3}
+  .det .hero{height:150px;border-bottom:1px solid var(--line-soft);background:var(--fill-1);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--faint)}
+  .det .pad{padding:12px}
+  .sect{padding:12px;border-top:1px solid var(--line-soft)}
+  .gap48{height:48px;background:repeating-linear-gradient(180deg,transparent,transparent 6px,var(--fill-1) 6px,var(--fill-1) 7px)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:999px;border:1px solid var(--line);margin-right:6px;vertical-align:middle}
+  .dot.d1{background:var(--fill-0)} .dot.d2{background:var(--fill-3)} .dot.d3{background:var(--fill-5)}
+  .hrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+  .hrow .card{flex:0 0 180px;margin-bottom:0}
+  .fixbtn{position:absolute;left:0;right:0;bottom:52px;padding:10px 12px;background:var(--fill-0);border-top:1px solid var(--line);z-index:5}
+
+  /* --- 시트 오버레이(전체 화면 시트) --- */
+  .ovl{position:absolute;inset:0;background:var(--fill-1);z-index:9;display:flex;flex-direction:column}
+  .ovl .oh{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid var(--line);background:var(--fill-0)}
+  .ovl .ob{padding:12px;overflow:auto;flex:1;background:var(--fill-0)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{border:1px solid var(--line);background:var(--fill-0);font-size:11px;font-weight:600;padding:6px 10px}
+  .chip[data-on]{background:var(--fill-3);font-weight:700}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}
+  .cal span{border:1px solid var(--line-soft);font-size:11px;text-align:center;padding:7px 0}
+  .cal span[data-off]{color:var(--faint);background:var(--fill-1);border-style:dashed}
+  .cal span[data-sel]{background:var(--fill-3);font-weight:700;border-color:var(--line)}
+  .field{border:1px solid var(--line);background:var(--fill-1);padding:10px;font-size:12px;color:var(--mid)}
+
+  /* --- 데스크톱 2단 --- */
+  .dk{display:grid;grid-template-columns:1fr 440px;min-height:640px}
+  .dk .left{position:relative;border-right:1px solid var(--line);min-height:640px}
+  .dk .right{padding:16px;overflow:auto;max-height:640px}
+  .dkhead{display:flex;align-items:center;gap:16px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .dkhead .lg{font-size:14px;font-weight:700}
+  .dkhead .sf{flex:1;border:1px solid var(--line);padding:8px 10px;font-size:12px;color:var(--mid)}
+  .center1{max-width:1024px;margin:0 auto;padding:16px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ================= 사이드바 ================= -->
+  <nav class="side">
+    <h1>한사나다<br>구조 와이어프레임</h1>
+    <p class="meta">흑백 lo-fi · 15화면 · 2026-09-02<br>색·서체·그림자 없음 — <b>배치·위계·흐름</b>만 봅니다.</p>
+
+    <div class="grp">흐름 F1 · 무테마 발견</div>
+    <button data-s="m1">1. 탐색 홈 · 로딩</button>
+    <button data-s="m2">2. 탐색 홈 · 기본 (시트 중간)</button>
+    <button data-s="m3">3. 시트 펼침 · 덜 알려진 순</button>
+
+    <div class="grp">흐름 F2 · 테마/검색</div>
+    <button data-s="m4">4. 검색 시트 · 일반 검색</button>
+
+    <div class="grp">흐름 F3 · 날짜</div>
+    <button data-s="m5">5. 날짜 시트 · 30일 캘린더</button>
+
+    <div class="grp">상태 화면</div>
+    <button data-s="m6">6. 탐색 홈 · 빈 결과</button>
+    <button data-s="m7">7. 탐색 홈 · 지도 실패</button>
+
+    <div class="grp">흐름 F4 · 검토→저장→재확인</div>
+    <button data-s="m8">8. 관광지 상세 · 정상</button>
+    <button data-s="m9">9. 상세 · 부분 결측+섹션 에러</button>
+    <button data-s="m10">10. 저장 편집 시트</button>
+    <button data-s="m11">11. 나만의 지도 · 정상</button>
+    <button data-s="m12">12. 나만의 지도 · 빈 상태</button>
+
+    <div class="grp">경계 표시</div>
+    <button data-s="m13">13. 첫 사용 안내 ⚠동작경계</button>
+
+    <div class="grp">데스크톱</div>
+    <button data-s="d1">14. 탐색 홈 · 2단</button>
+    <button data-s="d2">15. 상세 · 1024px 1단</button>
+
+    <p class="note"><b>게이트 3 판정</b><br>핵심 흐름 1개(F1 또는 F4)를 처음부터 끝까지 넘겨보고, 정상·빈·에러 세 화면을 확인한 뒤 <b>“이 배치·흐름이 말이 된다”</b>고 판단되면 통과입니다.</p>
+  </nav>
+
+  <!-- ================= 스테이지 ================= -->
+  <main class="stage">
+    <div class="bar">
+      <h2 id="ttl">탐색 홈 · 로딩</h2>
+      <span class="tag" id="rt">/</span>
+      <span class="nav"><button id="prev">← 이전</button><button id="next">다음 →</button></span>
+    </div>
+    <p class="desc" id="dsc"></p>
+    <div id="wrap"></div>
+
+    <!-- ---------- M1 로딩 ---------- -->
+    <section class="screen" id="m1" hidden>
+      <div class="frame mob">
+        <div class="map"><div class="grid">
+          <div class="lv1"></div><div class="lv1"></div><div class="lv1"></div>
+          <div class="lv1"></div><div class="lv1"></div><div class="lv1"></div>
+          <div class="lv1"></div><div class="lv1"></div><div class="lv1"></div>
+        </div></div>
+        <div class="topbar">
+          <div class="sf"><span>관광지 이름으로 찾기</span><span>🔍</span></div>
+        </div>
+        <div class="sheet mid">
+          <div class="handle"></div>
+          <div class="shead"><span class="cn">section-heading (로딩)</span><div class="skel" style="height:20px;width:56%"></div></div>
+          <div class="sbody">
+            <span class="cn">place-card 스켈레톤 ×3 — 스피너 금지</span>
+            <div class="skel" style="height:96px"></div><div class="skel" style="height:16px;width:60%"></div><div class="skel" style="height:12px;width:40%;margin-bottom:20px"></div>
+            <div class="skel" style="height:96px"></div><div class="skel" style="height:16px;width:52%"></div><div class="skel" style="height:12px;width:44%;margin-bottom:20px"></div>
+            <div class="skel" style="height:96px"></div>
+          </div>
+        </div>
+        <div class="bnav"><div data-on>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M2 기본 ---------- -->
+    <section class="screen" id="m2" hidden>
+      <div class="frame mob">
+        <div class="map"><div class="grid">
+          <div class="lv1">1</div><div class="lv2">2</div><div class="lv4">4</div>
+          <div class="nodata"><span class="pill">정보 없음</span></div><div class="lv2">2</div><div class="lv3"><span class="pill">강릉시</span></div>
+          <div class="lv1">1</div><div class="lv3">3</div><div class="lv2">2</div>
+        </div></div>
+        <div class="topbar">
+          <span class="cn">search-field</span>
+          <div class="sf"><span>관광지 이름으로 찾기</span><span>🔍</span></div>
+          <span class="cn" style="margin-top:6px">조건 요약 줄 — 각 칩이 해당 시트 입구 (U4) · 가로 스크롤 (U14)</span>
+          <div class="condrow">
+            <span class="cond">강원 전체</span><span class="cond">무테마</span><span class="cond">날짜 미정</span><span class="cond">인기 많은 순</span><span class="cond reset">초기화</span>
+          </div>
+        </div>
+        <div class="mapcta"><span class="cn">region-search-button (지도 이동 후에만)</span>이 지도 영역에서 검색</div>
+        <div class="legend" style="bottom:calc(56% + 8px)">
+          <span class="cn">map-legend — 시트에 붙어 함께 이동 (U1)</span>
+          <div class="t-s" style="font-weight:700;color:var(--ink)">지역 방문 규모</div>
+          <div class="sc"><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i><i class="nodata"></i></div>
+          <div class="t-s">적음 → 많음 · 사선 = 정보 없음 (U16)</div>
+          <div class="t-s">한국관광공사 · 2026-05~07 기준</div>
+        </div>
+        <div class="sheet mid">
+          <div class="handle"></div>
+          <div class="shead">
+            <div class="headrow">
+              <div><span class="cn">section-heading</span><span class="t-m">이 지도 범위 24곳</span></div>
+              <div><span class="cn">sort-toggle</span><span class="seg"><span data-on>인기 많은 순</span><span>덜 알려진 순</span></span></div>
+            </div>
+            <span class="cn" style="margin-top:6px">data-source-note — 접지 않음 (U3) · 지도 범례와 다른 블록 (U15)</span>
+            <div class="t-s">관광지 관심도는 내비게이션 목적지 집계예요. 실제 방문객 수가 아니에요 · 티맵 관광지 관심지점 · 2026-07 기준</div>
+          </div>
+          <div class="sbody">
+            <span class="cn">place-card</span>
+            <div class="card">
+              <div class="thumb">사진</div>
+              <div class="savebtn on">♥</div>
+              <p class="ttl">주문진 해수욕장</p>
+              <p class="addr">강원특별자치도 강릉시 주문진읍 해안로 1758</p>
+              <span class="bdg quiet">이 장소 기준 한산</span><span class="bdg normal">해수욕장</span>
+              <p class="cap">9월 14일 · 이 장소의 30일 예측 중 낮은 편<br>한국관광공사 · 오늘 06:00 기준</p>
+            </div>
+            <div class="card">
+              <div class="thumb">사진</div>
+              <div class="savebtn">♡</div>
+              <p class="ttl">평창 대관령 삼양목장 하늘목장 전망대 산책로 입구 <span style="color:var(--faint)">← 긴 이름 2줄 말줄임</span></p>
+              <p class="addr">강원특별자치도 평창군 대관령면 꽃밭양지길 458-23 일원</p>
+              <span class="bdg busy">이 장소 기준 혼잡</span>
+              <p class="cap">한국관광공사 · 오늘 06:00 기준</p>
+            </div>
+          </div>
+        </div>
+        <div class="bnav"><div data-on>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M3 펼침 + 덜 알려진 순 ---------- -->
+    <section class="screen" id="m3" hidden>
+      <div class="frame mob">
+        <div class="map"><div class="grid"><div class="lv1"></div><div class="lv2"></div><div class="lv4"></div><div class="nodata"></div><div class="lv2"></div><div class="lv3"></div><div class="lv1"></div><div class="lv3"></div><div class="lv2"></div></div></div>
+        <div class="sheet full">
+          <div class="handle"></div>
+          <div class="shead">
+            <div class="headrow">
+              <div><span class="t-m">이 지도 범위 24곳</span></div>
+              <span class="seg"><span>인기 많은 순</span><span data-on>덜 알려진 순</span></span>
+            </div>
+            <div class="t-s" style="margin-top:6px">관광지 관심도 · 티맵 관광지 관심지점 · 2026-07 기준</div>
+          </div>
+          <div class="sbody">
+            <div class="card"><p class="ttl">아홉사리계곡</p><p class="addr">홍천군 내면</p><span class="bdg quiet">이 장소 기준 한산</span><p class="cap">티맵 관심지점 · 2026-07 기준</p></div>
+            <div class="card"><p class="ttl">배후령 전망대</p><p class="addr">춘천시 신북읍</p><span class="bdg normal">이 장소 기준 보통</span><p class="cap">티맵 관심지점 · 2026-07 기준</p></div>
+            <span class="cn">divider + 별도 구간 — 미산정은 정렬 구간 밖 (U17 · AC 위반 방지)</span>
+            <div class="divider"></div>
+            <div class="headrow" style="margin-bottom:8px">
+              <span class="t-m">관심도 미산정 6곳</span>
+              <span class="bdg nodata" style="margin:0">낮은 관심도 아님</span>
+            </div>
+            <div class="card"><p class="ttl">한섬해변</p><p class="addr">동해시 천곡동</p><span class="bdg nodata">관심도 미산정</span><span class="bdg nodata">예측 정보 없음</span><p class="cap">관심도 데이터가 없어요. 낮다는 뜻이 아니에요</p></div>
+          </div>
+        </div>
+        <div class="bnav"><div data-on>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M4 검색 시트 ---------- -->
+    <section class="screen" id="m4" hidden>
+      <div class="frame mob">
+        <div class="ovl">
+          <div class="oh"><span class="t-m">검색</span><span class="btn">✕ 닫기</span></div>
+          <div class="ob">
+            <span class="cn">search-field (입력값) </span>
+            <div class="field" style="color:var(--ink);font-weight:600">속초 조용한 카페</div>
+            <span class="cn" style="margin-top:14px">theme-chip ×8 — 지도 위에서 여기로 이동 (D5 · U12)</span>
+            <div class="chips">
+              <span class="chip">벚꽃</span><span class="chip">꽃축제</span><span class="chip">해수욕장</span><span class="chip">계곡</span>
+              <span class="chip">단풍</span><span class="chip">억새</span><span class="chip">눈꽃</span><span class="chip">해돋이</span>
+            </div>
+            <span class="cn" style="margin-top:16px">general-search-notice — 결과 상단 고정 · 칩 형태 금지 (U18 · ADR-0003)</span>
+            <div class="box dash">
+              <p class="t-s" style="margin:0">‘속초 조용한 카페’는 지원 테마가 아니에요. 관광 정보에서 찾은 <b style="color:var(--ink)">일반 검색 결과</b>라 테마 적합성이나 대체지 추천을 보증하지 않아요.</p>
+            </div>
+            <div class="card" style="margin-top:12px"><p class="ttl">영금정</p><p class="addr">속초시 동명동</p><span class="bdg nodata">일반 검색 결과</span><p class="cap">KorService2 키워드 검색 · 2026-09-02</p></div>
+            <div class="card"><p class="ttl">속초해수욕장</p><p class="addr">속초시 조양동</p><span class="bdg nodata">일반 검색 결과</span><p class="cap">KorService2 키워드 검색 · 2026-09-02</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- M5 날짜 시트 ---------- -->
+    <section class="screen" id="m5" hidden>
+      <div class="frame mob">
+        <div class="ovl">
+          <div class="oh"><span class="t-m">언제 가세요?</span><span class="btn">✕ 닫기</span></div>
+          <div class="ob">
+            <span class="cn">날짜 모드 탭</span>
+            <span class="seg" style="width:100%"><span data-on style="flex:1;text-align:center">날짜가 정해졌어요</span><span style="flex:1;text-align:center">한산한 날에 갈래요</span></span>
+            <span class="cn" style="margin-top:16px">30일 캘린더 — 30일 밖은 button-primary-disabled로 <b>구조 예방</b> (U10 · H5)</span>
+            <div class="t-s" style="color:var(--ink);font-weight:600">2026년 9월</div>
+            <div class="cal">
+              <span data-off>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span>
+              <span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span data-sel>14</span>
+              <span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span>
+              <span>22</span><span>23</span><span>24</span><span>25</span><span>26</span><span>27</span><span>28</span>
+              <span>29</span><span>30</span><span data-off>1</span><span data-off>2</span><span data-off>3</span><span data-off>4</span><span data-off>5</span>
+            </div>
+            <p class="t-s" style="margin-top:10px">회색 = 향후 30일 밖이라 예측이 없어요 (선택 불가)</p>
+            <span class="bdg nodata">9/19 예측 정보 없음</span>
+            <div style="margin-top:16px"><span class="btn pri block">9월 14일로 볼게요</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- M6 빈 결과 ---------- -->
+    <section class="screen" id="m6" hidden>
+      <div class="frame mob">
+        <div class="map"><div class="grid"><div class="lv1"></div><div class="lv1"></div><div class="lv2"></div><div class="nodata"></div><div class="lv1"></div><div class="lv1"></div><div class="lv1"></div><div class="lv2"></div><div class="lv1"></div></div></div>
+        <div class="topbar"><div class="sf"><span>관광지 이름으로 찾기</span><span>🔍</span></div>
+          <div class="condrow"><span class="cond">이 지도 영역</span><span class="cond">눈꽃</span><span class="cond">9/14</span><span class="cond">인기 많은 순</span><span class="cond reset">초기화</span></div>
+        </div>
+        <div class="sheet mid">
+          <div class="handle"></div>
+          <div class="shead"><span class="t-m">이 지도 범위 0곳</span></div>
+          <div class="sbody">
+            <span class="cn">empty-state — 막다른 길 금지, 다음 행동을 준다</span>
+            <div class="state">
+              <p class="t-m">이 범위에 ‘눈꽃’ 테마 관광지가 없어요.</p>
+              <p class="t-s">지도를 넓히거나 테마를 바꿔 보세요.</p>
+              <div style="margin-top:12px;display:flex;gap:8px;justify-content:center">
+                <span class="btn pri">지도 넓히기</span><span class="btn">테마 바꾸기</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bnav"><div data-on>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M7 지도 실패 ---------- -->
+    <section class="screen" id="m7" hidden>
+      <div class="frame mob">
+        <div class="map" style="display:flex;align-items:center;justify-content:center;background:var(--fill-1)">
+          <div class="state" style="width:280px">
+            <p class="t-m">지도를 불러오지 못했어요</p>
+            <p class="t-s">목록으로는 계속 탐색할 수 있어요.</p>
+            <div style="margin-top:10px"><span class="btn">다시 시도</span></div>
+          </div>
+        </div>
+        <div class="sheet full">
+          <div class="handle"></div>
+          <div class="shead">
+            <span class="cn">지도 실패 → 시트가 <b>자동으로 펼침 스냅</b>으로 올라간다 (U8)</span>
+            <div class="headrow"><span class="t-m">최근 범위의 24곳</span><span class="seg"><span data-on>인기 많은 순</span><span>덜 알려진 순</span></span></div>
+          </div>
+          <div class="sbody">
+            <div class="card"><p class="ttl">주문진 해수욕장</p><p class="addr">강릉시 주문진읍</p><span class="bdg quiet">이 장소 기준 한산</span><p class="cap">티맵 관심지점 · 2026-07 기준</p></div>
+            <div class="card"><p class="ttl">경포대</p><p class="addr">강릉시 저동</p><span class="bdg busy">이 장소 기준 혼잡</span><p class="cap">티맵 관심지점 · 2026-07 기준</p></div>
+          </div>
+        </div>
+        <div class="bnav"><div data-on>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M8 상세 정상 ---------- -->
+    <section class="screen" id="m8" hidden>
+      <div class="frame mob">
+        <div class="det">
+          <div class="topback">← 뒤로 <span class="cn" style="display:inline">H3 비상구</span></div>
+          <div class="hero">사진 16:9</div>
+          <div class="pad">
+            <span class="cn">place-detail-title — 말줄임 없음</span>
+            <p class="t-l" style="margin:0">정동진 모래시계공원</p>
+            <p class="t-s">강원특별자치도 강릉시 강동면 · 관광지</p>
+            <p class="t-s">한국관광공사 KorService2 · 2026-09-01 기준</p>
+          </div>
+          <div class="gap48"></div>
+          <div class="sect">
+            <span class="cn">section-heading</span><p class="t-m" style="margin:0 0 8px">언제 갈까요</p>
+            <span class="seg" style="width:100%;margin-bottom:8px"><span data-on style="flex:1;text-align:center">날짜가 정해졌어요</span><span style="flex:1;text-align:center">한산한 날에 갈래요</span></span>
+            <div class="box"><span class="cn">30일 예측 — 이 장소 자체 기준</span>
+              <span class="bdg quiet">9/14 · 이 장소 기준 한산</span>
+              <p class="qdate">9월 24일</p><p class="t-s" style="margin:0">이 장소에서 가장 한산한 편</p>
+            </div>
+            <p class="t-s">이 장소 자체의 30일 예측 안에서 비교한 값이에요 · 오늘 06:00 기준</p>
+          </div>
+          <div class="gap48"></div>
+          <div class="sect">
+            <p class="t-m" style="margin:0 0 8px">지금 가는 길</p>
+            <span class="cn">road-status-dot-* — 배지가 아니라 점 (다른 신호와 형태 구분)</span>
+            <p class="t-s" style="color:var(--ink)"><i class="dot d1"></i>주변 도로 원활 · 평균 48km/h</p>
+            <p class="t-s" style="color:var(--ink)"><i class="dot d2"></i>진입로 서행 · 평균 21km/h</p>
+            <p class="t-s" style="color:var(--ink)"><i class="dot d3"></i>해안로 정체 · 평균 9km/h</p>
+            <span class="bdg normal">주차 잔여 12면</span>
+            <p class="t-s">국가교통정보센터 · 오늘 14:20 조회<br><b style="color:var(--ink)">미래 날짜의 인파와는 다른 정보예요</b> (U20)</p>
+          </div>
+          <div class="gap48"></div>
+          <div class="sect">
+            <p class="t-m" style="margin:0 0 8px">대신 가볼 만한 곳</p>
+            <div class="hrow">
+              <div class="card"><div class="thumb">사진</div><p class="ttl">헌화로 해안</p><span class="bdg quiet">한산</span></div>
+              <div class="card"><div class="thumb">사진</div><p class="ttl">등명락가사</p><span class="bdg normal">보통</span></div>
+            </div>
+            <p class="t-s">추천 자격(관광지 · 원래 장소와 다름 · 유효한 예측)을 통과한 곳만이에요</p>
+          </div>
+          <div class="gap48"></div>
+          <div class="sect">
+            <p class="t-m" style="margin:0 0 8px">함께 가기 좋은 곳</p>
+            <span class="cn">같은 카드 모양 · 다른 섹션 · 다른 문구 (우열 아니라 종류)</span>
+            <div class="hrow">
+              <div class="card"><div class="thumb">사진</div><p class="ttl">정동진역 앞 식당</p><span class="bdg normal">음식점</span></div>
+              <div class="card"><div class="thumb">사진</div><p class="ttl">썬크루즈 리조트</p><span class="bdg normal">숙박</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="fixbtn"><span class="cn">button-primary — 화면당 행동 하나 (D6)</span><span class="btn pri block">저장하기</span></div>
+        <div class="bnav"><div>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M9 상세 부분 결측 + 섹션 에러 ---------- -->
+    <section class="screen" id="m9" hidden>
+      <div class="frame mob">
+        <div class="det">
+          <div class="topback">← 뒤로</div>
+          <div class="hero">사진 16:9</div>
+          <div class="pad"><p class="t-l" style="margin:0">한섬해변</p><p class="t-s">동해시 천곡동 · 관광지</p></div>
+          <div class="gap48"></div>
+          <div class="sect">
+            <p class="t-m" style="margin:0 0 8px">언제 갈까요</p>
+            <span class="cn">결측이어도 섹션을 <b>숨기지 않는다</b> — 빈자리는 좋은 소식으로 읽힌다</span>
+            <div class="box dash"><span class="bdg nodata">예측 정보 없음</span>
+              <p class="t-s" style="margin:8px 0 0">이 장소는 방문 혼잡도 예측이 제공되지 않아요. 한산하다는 뜻이 아니에요.</p></div>
+          </div>
+          <div class="gap48"></div>
+          <div class="sect">
+            <p class="t-m" style="margin:0 0 8px">지금 가는 길</p>
+            <span class="cn">error-state — <b>이 섹션만</b> 실패, 다른 섹션은 살아 있다 (U7)</span>
+            <div class="state" style="text-align:left">
+              <p class="t-m" style="margin:0 0 4px">도로 정보를 불러오지 못했어요</p>
+              <p class="t-s" style="margin:0 0 10px">다른 정보는 그대로 보여요.</p>
+              <span class="btn">다시 시도</span>
+            </div>
+            <span class="bdg nodata">현재 주차 정보 없음</span>
+          </div>
+          <div class="gap48"></div>
+          <div class="sect">
+            <p class="t-m" style="margin:0 0 8px">대신 가볼 만한 곳</p>
+            <span class="cn">empty-state — 빈 추천을 감추지 않는다</span>
+            <div class="state"><p class="t-s" style="margin:0">지금은 추천 자격을 통과한 후보가 없어요.</p></div>
+          </div>
+        </div>
+        <div class="fixbtn"><span class="btn pri block">저장하기</span></div>
+        <div class="bnav"><div>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M10 저장 편집 시트 ---------- -->
+    <section class="screen" id="m10" hidden>
+      <div class="frame mob">
+        <div class="ovl">
+          <div class="oh"><span class="t-m">저장하기</span><span class="btn">✕ 닫기</span></div>
+          <div class="ob">
+            <div class="box"><span class="t-m">정동진 모래시계공원</span><p class="t-s" style="margin:2px 0 0">강릉시 강동면</p></div>
+            <span class="cn" style="margin-top:14px">tag-chip — 알약형(사용자가 쓴 것) · theme-chip(8px)과 모양으로 구분</span>
+            <div class="chips">
+              <span class="chip" style="border-radius:999px" data-on>바다</span>
+              <span class="chip" style="border-radius:999px" data-on>일출</span>
+              <span class="chip" style="border-radius:999px;border-style:dashed">+ 태그 추가</span>
+            </div>
+            <span class="cn" style="margin-top:14px">memo-field — 편집 중 최대 높이 후 내부 스크롤</span>
+            <div class="field" style="height:96px;color:var(--ink)">주차가 좁다고 하니 아침 일찍. 근처 등명락가사도 같이 볼 것.</div>
+            <span class="cn" style="margin-top:14px">방문 예정일 (선택)</span>
+            <div class="field">9월 14일 (토)</div>
+            <div class="divider"></div>
+            <div style="display:flex;gap:8px"><span class="btn pri" style="flex:1;text-align:center">저장</span><span class="btn" style="flex:1;text-align:center">저장 취소</span></div>
+            <p class="t-s" style="margin-top:8px">저장 취소는 한 단계 확인을 거쳐요 (H5 에러 예방)</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- M11 나만의 지도 ---------- -->
+    <section class="screen" id="m11" hidden>
+      <div class="frame mob">
+        <div class="map"><div class="grid" style="grid-template-columns:1fr;grid-template-rows:1fr">
+          <div style="background:var(--fill-0);position:relative">
+            <span class="pill" style="position:absolute;left:40px;top:60px">주문진 해수욕장</span>
+            <span class="pill" style="position:absolute;left:150px;top:150px">정동진</span>
+            <span class="pill" style="position:absolute;left:70px;top:230px">아홉사리계곡</span>
+            <span class="cn" style="position:absolute;left:12px;bottom:12px">방문 규모 색 <b>없음</b> — 개인 화면은 인기 순위를 나타내지 않는다 (ADR-0005)</span>
+          </div>
+        </div></div>
+        <div class="sheet mid">
+          <div class="handle"></div>
+          <div class="shead">
+            <div class="headrow"><span class="t-m">저장한 곳 7곳</span></div>
+            <span class="cn" style="margin-top:6px">tag-chip 필터 — 정렬 토글 없음</span>
+            <div class="chips"><span class="chip" style="border-radius:999px" data-on>전체</span><span class="chip" style="border-radius:999px">바다</span><span class="chip" style="border-radius:999px">계곡</span><span class="chip" style="border-radius:999px">일출</span></div>
+          </div>
+          <div class="sbody">
+            <div class="card"><div class="savebtn on">♥</div><p class="ttl">정동진 모래시계공원</p><p class="addr">강릉시 강동면</p><span class="bdg normal">9/14 방문 예정</span><span class="bdg nodata">바다 · 일출</span><p class="cap">탭하면 저장 편집 시트가 열려요</p></div>
+            <div class="card"><div class="savebtn on">♥</div><p class="ttl">아홉사리계곡</p><p class="addr">홍천군 내면</p><span class="bdg nodata">최신 정보를 불러오지 못했어요</span></div>
+          </div>
+        </div>
+        <div class="bnav"><div>탐색 홈</div><div data-on>나만의 지도<span class="cnt">7</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M12 나만의 지도 빈 상태 ---------- -->
+    <section class="screen" id="m12" hidden>
+      <div class="frame mob">
+        <div style="padding:24px;padding-top:120px">
+          <span class="cn">빈 지도를 보여주지 않는다 — 화면 전체가 empty-state (ADR-0005 명시)</span>
+          <p class="t-l">아직 저장한<br>곳이 없어요</p>
+          <p class="t-s">마음에 든 관광지를 저장하면 여기 지도에 모여요.</p>
+          <div style="margin-top:20px"><span class="btn pri block">탐색 홈에서 둘러보기</span></div>
+          <div style="margin-top:32px" class="box dash">
+            <span class="cn">손상된 로컬 데이터 — 화면 전체를 중단시키지 않는다 (슬라이스 #9 AC)</span>
+            <p class="t-s" style="margin:0">일부 저장 정보를 읽지 못했어요. 나머지는 그대로 보여요.</p>
+          </div>
+        </div>
+        <div class="bnav"><div>탐색 홈</div><div data-on>나만의 지도<span class="cnt">0</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------- M13 첫 사용 안내 ---------- -->
+    <section class="screen" id="m13" hidden>
+      <div class="frame mob">
+        <div class="map"><div class="grid"><div class="lv1"></div><div class="lv2"></div><div class="lv4"></div><div class="nodata"></div><div class="lv2"></div><div class="lv3"></div><div class="lv1"></div><div class="lv3"></div><div class="lv2"></div></div></div>
+        <div class="ovl" style="background:rgba(0,0,0,.35);justify-content:flex-end">
+          <div style="background:var(--fill-0);border-top:2px solid var(--line);padding:20px">
+            <span class="cn">⚠동작경계 — ‘이미 봤음’ 플래그가 슬라이스 #9 스키마에 없다. 개발 체인 확인 필요 (R1)</span>
+            <p class="t-l" style="margin:0 0 12px">시작하기 전에<br>한 가지만요</p>
+            <div class="box"><p class="t-s" style="margin:0"><b style="color:var(--ink)">지도 색</b>은 그 지역에 <b style="color:var(--ink)">최근 몇 명이 다녀갔는지</b>예요. 지금 붐비는지가 아니에요.</p></div>
+            <div class="box"><p class="t-s" style="margin:0"><b style="color:var(--ink)">인기 순서</b>는 <b style="color:var(--ink)">내비게이션 목적지 집계</b>예요. 실제 방문객 수가 아니에요.</p></div>
+            <div class="box"><p class="t-s" style="margin:0"><b style="color:var(--ink)">한산·혼잡</b>은 <b style="color:var(--ink)">그 장소 자기 기준</b>이에요. 다른 장소와 비교한 값이 아니에요.</p></div>
+            <div style="margin-top:16px"><span class="btn pri block">알겠어요</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- D1 데스크톱 2단 ---------- -->
+    <section class="screen" id="d1" hidden>
+      <div class="frame desk">
+        <div class="dkhead"><span class="lg">한사나다</span><span class="sf">관광지 이름으로 찾기</span><span class="btn">나만의 지도 (7)</span></div>
+        <div class="dk">
+          <div class="left">
+            <div class="map"><div class="grid">
+              <div class="lv1">춘천</div><div class="lv2">홍천</div><div class="lv4">강릉</div>
+              <div class="nodata"><span class="pill">정보 없음</span></div><div class="lv2">평창</div><div class="lv3">속초</div>
+              <div class="lv1">정선</div><div class="lv3">양양</div><div class="lv2">동해</div>
+            </div></div>
+            <div class="mapcta" style="top:16px">이 지도 영역에서 검색</div>
+            <div class="legend" style="bottom:16px">
+              <div class="t-s" style="font-weight:700;color:var(--ink)">지역 방문 규모</div>
+              <div class="sc"><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i><i class="nodata"></i></div>
+              <div class="t-s">적음 → 많음 · 사선 = 정보 없음</div>
+              <div class="t-s">한국관광공사 · 2026-05~07 기준</div>
+            </div>
+          </div>
+          <div class="right">
+            <span class="cn">우측 컬럼만 스크롤 · 최대 440px · 탐색 홈만 전폭 (D2)</span>
+            <div class="headrow"><span class="t-m">이 지도 범위 24곳</span><span class="seg"><span data-on>인기 많은 순</span><span>덜 알려진 순</span></span></div>
+            <div class="chips" style="margin:8px 0"><span class="chip">벚꽃</span><span class="chip">해수욕장</span><span class="chip">계곡</span><span class="chip">단풍</span><span class="chip">눈꽃</span></div>
+            <p class="t-s">관광지 관심도는 내비게이션 목적지 집계예요 · 티맵 관광지 관심지점 · 2026-07 기준</p>
+            <div class="card"><div class="thumb">사진</div><div class="savebtn on">♥</div><p class="ttl">주문진 해수욕장</p><p class="addr">강릉시 주문진읍 해안로 1758</p><span class="bdg quiet">이 장소 기준 한산</span><p class="cap">9/14 · 30일 예측 중 낮은 편</p></div>
+            <div class="card"><div class="thumb">사진</div><div class="savebtn">♡</div><p class="ttl">경포대</p><p class="addr">강릉시 저동</p><span class="bdg busy">이 장소 기준 혼잡</span><p class="cap">한국관광공사 · 오늘 06:00 기준</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- D2 데스크톱 상세 ---------- -->
+    <section class="screen" id="d2" hidden>
+      <div class="frame desk">
+        <div class="dkhead"><span class="lg">한사나다</span><span class="sf">관광지 이름으로 찾기</span><span class="btn pri">저장하기</span></div>
+        <div class="center1">
+          <span class="cn">상세는 최대 1024px 중앙 1단 · 하단 고정 버튼 → 우측 상단으로 이동</span>
+          <div class="hero" style="border:1px solid var(--line-soft)">사진 16:9</div>
+          <p class="t-l" style="margin:12px 0 0">정동진 모래시계공원</p>
+          <p class="t-s">강원특별자치도 강릉시 강동면 · 관광지 · 한국관광공사 KorService2 · 2026-09-01 기준</p>
+          <div class="gap48"></div>
+          <p class="t-m">언제 갈까요</p>
+          <div class="box"><span class="bdg quiet">9/14 · 이 장소 기준 한산</span><p class="qdate">9월 24일</p><p class="t-s" style="margin:0">이 장소에서 가장 한산한 편 · 오늘 06:00 기준</p></div>
+          <div class="gap48"></div>
+          <p class="t-m">지금 가는 길</p>
+          <p class="t-s" style="color:var(--ink)"><i class="dot d1"></i>주변 도로 원활 · 평균 48km/h &nbsp;&nbsp; <i class="dot d2"></i>진입로 서행 · 21km/h</p>
+          <p class="t-s">국가교통정보센터 · 오늘 14:20 조회 · 미래 날짜의 인파와는 다른 정보예요</p>
+          <div class="gap48"></div>
+          <p class="t-m">대신 가볼 만한 곳 <span class="cn" style="display:inline">가로 스크롤 → 3열 그리드로 펼침</span></p>
+          <div class="grid3">
+            <div class="card"><div class="thumb">사진</div><p class="ttl">헌화로 해안</p><span class="bdg quiet">한산</span></div>
+            <div class="card"><div class="thumb">사진</div><p class="ttl">등명락가사</p><span class="bdg normal">보통</span></div>
+            <div class="card"><div class="thumb">사진</div><p class="ttl">안인해변</p><span class="bdg nodata">예측 정보 없음</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  var SCREENS = [
+    ['m1','탐색 홈 · 로딩','/','스켈레톤으로 뼈대를 먼저 보여줍니다. 외부 API 대여섯 개를 기다리므로 스피너를 쓰면 화면이 계속 깜빡입니다.'],
+    ['m2','탐색 홈 · 기본 (시트 중간 스냅)','/','<b>F1 시작점.</b> 첫 진입 기본 상태 — 강원 전체 · 무테마 · 날짜 미정 · 인기 많은 순 (ADR-0005). 확인할 것: 조건 요약 줄(U4), 시트에 붙어 움직이는 범례(U1), 지도 범례와 목록 caption이 <b>다른 블록</b>에 있는지(U15).'],
+    ['m3','탐색 홈 · 시트 펼침 · 덜 알려진 순','/','정렬을 뒤집은 상태. 확인할 것: <b>관심도 미산정</b>이 정렬 구간이 아니라 divider 아래 별도 구간에 있는지(U17 · D7).'],
+    ['m4','검색 시트 · 일반 검색 결과','/?q=','<b>F2.</b> 테마 칩 8개가 지도 위가 아니라 여기 있습니다(D5 · U12). 확인할 것: 일반 검색 안내가 <b>결과 위에 고정</b>이고 자유 입력어가 칩 모양이 아닌지(U18).'],
+    ['m5','날짜 시트 · 30일 캘린더','/?date=','<b>F3.</b> 확인할 것: 30일 밖 날짜가 <b>비활성</b>이라 애초에 못 고르는지(U10 · H5 에러 예방 — 사후 메시지가 아니라 구조로 막습니다).'],
+    ['m6','탐색 홈 · 빈 결과','/','빈 상태가 <b>막다른 길이 아니라</b> 다음 행동 두 개를 줍니다.'],
+    ['m7','탐색 홈 · 지도 실패','/','바텀시트 선택의 부작용을 막는 화면 — 지도가 죽어도 시트가 자동으로 펼쳐져 목록만으로 탐색이 이어집니다(U8).'],
+    ['m8','관광지 상세 · 정상','/places/:id','<b>F4 시작점.</b> 다섯 섹션이 48px로 벌어져 있습니다. 확인할 것: 30일 예측과 「지금 가는 길」이 섞여 읽히지 않는지(U20), 도로 상태가 배지가 아니라 <b>점</b>인지.'],
+    ['m9','상세 · 부분 결측 + 섹션 에러','/places/:id','<b>이 제품에서 가장 흔한 상태입니다.</b> 확인할 것: 결측 섹션을 숨기지 않는지, 한 섹션의 실패가 다른 섹션을 죽이지 않는지(U7).'],
+    ['m10','저장 편집 시트','/places/:id/save','태그(알약)와 테마 칩(각진 모서리)이 <b>모양으로</b> 구분됩니다 — 사용자가 쓴 것과 시스템이 검증한 것.'],
+    ['m11','나만의 지도 · 정상','/saved','탐색 홈과 같은 골격을 재사용하되(D8) 방문 규모 색이 <b>없습니다</b> — 개인 화면은 인기 순위를 나타내지 않습니다(ADR-0005).'],
+    ['m12','나만의 지도 · 빈 상태','/saved','빈 지도를 보여주지 않고 화면 전체가 탐색 홈으로 가는 입구가 됩니다(ADR-0005 명시).'],
+    ['m13','첫 사용 안내 시트','/ (오버레이)','<b>⚠동작경계.</b> 내용은 PRD가 요구하지만 “이미 봤음” 플래그를 어디 저장할지는 정해진 바가 없습니다 — 개발 체인으로 넘깁니다(R1).'],
+    ['d1','데스크톱 · 탐색 홈 2단','/','좌 지도 고정 · 우 목록만 스크롤. <b>탐색 홈만 전폭</b>입니다(D2).'],
+    ['d2','데스크톱 · 상세 1024px 1단','/places/:id','상세는 중앙 1단. 가로 스크롤 카드가 3열 그리드로 펼쳐지고, 하단 고정 버튼은 우측 상단으로 갑니다.']
+  ];
+  var i = 0;
+  var btns = document.querySelectorAll('.side button');
+  function show(n){
+    i = (n + SCREENS.length) % SCREENS.length;
+    var s = SCREENS[i];
+    SCREENS.forEach(function(x){ document.getElementById(x[0]).hidden = true; });
+    document.getElementById(s[0]).hidden = false;
+    document.getElementById('ttl').textContent = s[1];
+    document.getElementById('rt').textContent = s[2];
+    document.getElementById('dsc').innerHTML = s[3];
+    btns.forEach(function(b){ b.setAttribute('aria-current', b.dataset.s === s[0] ? 'true' : 'false'); });
+  }
+  btns.forEach(function(b){ b.addEventListener('click', function(){ show(SCREENS.findIndex(function(x){return x[0]===b.dataset.s;})); }); });
+  document.getElementById('prev').addEventListener('click', function(){ show(i-1); });
+  document.getElementById('next').addEventListener('click', function(){ show(i+1); });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='ArrowRight'){ show(i+1); } if(e.key==='ArrowLeft'){ show(i-1); }
+  });
+  show(1);
+</script>
+</body>
+</html>

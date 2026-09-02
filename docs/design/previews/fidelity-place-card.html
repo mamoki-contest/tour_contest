@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>한사나다 · 충실도 미리보기</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root{
+    --primary:#3182F6; --primary-strong:#1B64DA; --primary-deep:#194AA6; --primary-surface:#E8F3FF; --primary-soft:#90C2FF;
+    --grey-900:#191F28; --grey-800:#333D4B; --grey-700:#4E5968; --grey-600:#6B7684;
+    --grey-500:#8B95A1; --grey-400:#B0B8C1; --grey-300:#D1D6DB; --grey-200:#E5E8EB;
+    --grey-100:#F2F4F6; --grey-50:#F9FAFB; --surface:#FFFFFF;
+    --red:#F04452; --red-surface:#FFEEEE; --red-deep:#A51926; --green:#03B26C; --amber:#FF9200;
+    --shadow-float: 0 2px 10px rgba(0,27,55,.1), 0 3px 20px rgba(2,32,71,.05);
+    --font: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:var(--font); background:var(--grey-100); color:var(--grey-900);
+    word-break:keep-all; overflow-wrap:break-word;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:1180px;margin:0 auto;padding:40px 24px 96px}
+  .doc-head{margin-bottom:40px}
+  .doc-head h1{font-size:30px;line-height:40px;font-weight:700;margin:0 0 8px}
+  .doc-head p{font-size:15px;line-height:22.5px;font-weight:400;color:var(--grey-700);margin:0 0 6px;max-width:70ch}
+  .doc-head a{color:var(--primary-strong);font-weight:600}
+  .cols{display:grid;grid-template-columns:1fr;gap:32px}
+  @media(min-width:900px){.cols{grid-template-columns:minmax(0,1fr) 411px}}
+  .panel{background:var(--surface);border-radius:20px;padding:24px}
+  .panel > h2{font-size:20px;line-height:29px;font-weight:700;margin:0 0 4px;color:var(--grey-800)}
+  .panel > .sub{font-size:13px;line-height:19.5px;color:var(--grey-600);margin:0 0 24px}
+  .blk{margin-bottom:32px}
+  .blk:last-child{margin-bottom:0}
+  .blk h3{font-size:13px;line-height:19.5px;font-weight:600;color:var(--grey-600);margin:0 0 12px;letter-spacing:normal}
+  .note{font-size:13px;line-height:19.5px;color:var(--grey-600);margin:8px 0 0}
+
+  /* ---- 레퍼런스 원자 ---- */
+  .swatches{display:flex;flex-wrap:wrap;gap:8px}
+  .sw{width:78px}
+  .sw i{display:block;height:44px;border-radius:8px;border:0}
+  .sw b{display:block;font-size:11px;line-height:16.5px;font-weight:600;color:var(--grey-700);margin-top:6px}
+  .sw span{display:block;font-size:11px;line-height:16.5px;color:var(--grey-600)}
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .btn48{height:48px;border-radius:12px;border:0;padding:0 16px;font-family:var(--font);font-size:17px;line-height:25.5px;font-weight:600;cursor:pointer;transition:background .2s, box-shadow .2s, color .1s}
+  .btn-primary{background:var(--primary-strong);color:#fff}
+  .btn-primary:active{background:var(--primary-deep)}
+  .btn-secondary{background:var(--grey-100);color:var(--grey-700)}
+  .icon40{width:40px;height:40px;border-radius:9999px;border:0;background:var(--grey-100);color:var(--grey-700);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+  .icon40.on{background:var(--primary-surface);color:var(--primary-strong)}
+  .seg{display:inline-flex;background:var(--grey-100);border-radius:12px;padding:4px;gap:0}
+  .seg button{border:0;background:transparent;font-family:var(--font);font-size:13px;line-height:19.5px;font-weight:600;color:var(--grey-700);padding:7px 14px;border-radius:8px;cursor:pointer;transition:background .2s,color .1s}
+  .seg button[aria-selected="true"]{background:var(--surface);color:var(--grey-900)}
+  .float-demo{background:var(--surface);border-radius:16px;box-shadow:var(--shadow-float);padding:12px 16px;font-size:13px;line-height:19.5px;font-weight:600;color:var(--primary-strong);display:inline-block}
+  .typescale > div{margin-bottom:10px;color:var(--grey-900)}
+  .typescale small{display:block;font-size:11px;line-height:16.5px;font-weight:400;color:var(--grey-600);margin-top:2px}
+  .radius-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .radius-row div{background:var(--grey-100);color:var(--grey-700);font-size:11px;font-weight:600;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;width:64px}
+
+  /* ---- 한사나다 폰 ---- */
+  .phone{width:375px;max-width:100%;margin:0 auto;background:var(--grey-50);border-radius:28px;overflow:hidden;box-shadow:var(--shadow-float)}
+  .phone-in{padding:24px 24px 32px}
+  .h-title{font-size:30px;line-height:40px;font-weight:700;color:var(--grey-900);margin:0 0 20px}
+  .search{height:48px;border-radius:16px;background:var(--grey-100);display:flex;align-items:center;padding:0 16px;gap:8px;color:var(--grey-600);font-size:17px;line-height:25.5px}
+  .search svg{flex:0 0 auto}
+  .chips{display:flex;gap:8px;overflow-x:auto;margin:16px -24px 0;padding:0 24px 4px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;border:0;background:var(--grey-100);color:var(--grey-700);font-family:var(--font);font-size:13px;line-height:19.5px;font-weight:600;padding:8px 12px;border-radius:8px;white-space:nowrap;cursor:pointer}
+  .chip[aria-pressed="true"]{background:var(--primary-surface);color:var(--primary-strong)}
+  .map{margin-top:24px;border-radius:20px;overflow:hidden;position:relative;background:var(--surface);height:186px}
+  .map svg{display:block;width:100%;height:100%}
+  .map-legend{position:absolute;left:12px;bottom:12px;background:var(--surface);border-radius:16px;padding:12px;box-shadow:var(--shadow-float)}
+  .map-legend b{display:block;font-size:11px;line-height:16.5px;font-weight:600;color:var(--grey-700)}
+  .legend-scale{display:flex;gap:3px;margin:6px 0 5px}
+  .legend-scale i{width:20px;height:8px;border-radius:2px}
+  .map-legend span{display:block;font-size:11px;line-height:16.5px;color:var(--grey-600)}
+  .map-cta{position:absolute;left:50%;top:12px;transform:translateX(-50%);height:40px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-float);border:0;font-family:var(--font);font-size:13px;line-height:19.5px;font-weight:600;color:var(--primary-strong);padding:0 14px;white-space:nowrap;cursor:pointer}
+  .map-pill{font-size:11px;font-weight:600;fill:var(--grey-900)}
+
+  .listhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:32px 0 8px}
+  .listhead h2{font-size:20px;line-height:29px;font-weight:700;margin:0;color:var(--grey-800)}
+  .src{font-size:13px;line-height:19.5px;color:var(--grey-600);margin:0 0 16px}
+
+  .card{background:var(--surface);border-radius:20px;padding:16px;margin-bottom:24px;position:relative;transition:background .2s}
+  .card.pressed{background:var(--grey-50)}
+  .thumb{height:132px;border-radius:16px;margin-bottom:12px;background:var(--grey-100);position:relative;overflow:hidden}
+  .thumb svg{display:block;width:100%;height:100%}
+  .card h3{font-size:17px;line-height:25.5px;font-weight:600;color:var(--grey-900);margin:0;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .card .addr{font-size:15px;line-height:22.5px;color:var(--grey-600);margin:4px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .badge{font-size:13px;line-height:19.5px;font-weight:600;border-radius:8px;padding:5px 8px;white-space:nowrap}
+  .b-quiet{background:var(--primary-surface);color:var(--primary-strong)}
+  .b-normal{background:var(--grey-100);color:var(--grey-700)}
+  .b-busy{background:var(--red-surface);color:var(--red-deep)}
+  .b-nodata{background:var(--surface);color:var(--grey-700);border:1px dashed var(--grey-300);padding:4px 7px}
+  .cap{font-size:13px;line-height:19.5px;color:var(--grey-600);margin:12px 0 0}
+  .save{position:absolute;right:16px;top:16px;width:40px;height:40px;border-radius:9999px;border:0;background:rgba(255,255,255,.92);backdrop-filter:blur(2px);color:var(--grey-700);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .save.on{background:var(--primary-surface);color:var(--primary-strong)}
+
+  .qdate{display:flex;align-items:baseline;gap:8px;margin-top:12px}
+  .qdate b{font-size:22px;line-height:31px;font-weight:700;font-feature-settings:'tnum' 1;color:var(--grey-900)}
+  .qdate span{font-size:15px;line-height:22.5px;color:var(--grey-600)}
+
+  .detail{background:var(--surface);border-radius:20px;padding:20px;margin-bottom:24px}
+  .detail h4{font-size:20px;line-height:29px;font-weight:700;margin:0 0 12px;color:var(--grey-800)}
+  .dot-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:15px;line-height:22.5px;color:var(--grey-700)}
+  .dot{width:8px;height:8px;border-radius:9999px;flex:0 0 auto}
+  .d-smooth{background:var(--green)} .d-slow{background:var(--amber)} .d-jam{background:var(--red)}
+
+  .state{border-radius:20px;padding:20px;margin-bottom:24px}
+  .s-empty{background:var(--grey-50);color:var(--grey-700);font-size:17px;line-height:25.5px}
+  .s-error{background:var(--red-surface);color:var(--red-deep);font-size:17px;line-height:25.5px}
+  .state .btn48{margin-top:16px}
+  .skel{background:var(--surface);border-radius:20px;padding:16px;margin-bottom:24px}
+  .skel i{display:block;background:var(--grey-100);border-radius:16px}
+  .skel .s1{height:132px;margin-bottom:12px}
+  .skel .s2{height:18px;width:62%;border-radius:6px;margin-bottom:8px}
+  .skel .s3{height:14px;width:44%;border-radius:6px}
+
+  .nav{display:flex;background:var(--surface);padding:8px 0 12px;border-radius:0}
+  .nav a{flex:1;text-align:center;text-decoration:none;font-size:12px;line-height:18px;font-weight:500;color:var(--grey-600);position:relative}
+  .nav a.on{color:var(--primary-strong)}
+  .nav .ic{display:block;font-size:18px;line-height:22px;margin-bottom:2px}
+  .cnt{position:absolute;top:-4px;left:calc(50% + 8px);background:var(--primary-strong);color:#fff;font-size:11px;line-height:16.5px;font-weight:600;border-radius:9999px;padding:0 4px;min-width:16px}
+
+  .checks{background:var(--surface);border-radius:20px;padding:24px;margin-top:32px}
+  .checks h2{font-size:20px;line-height:29px;font-weight:700;margin:0 0 16px;color:var(--grey-800)}
+  .checks ul{margin:0;padding-left:20px}
+  .checks li{font-size:15px;line-height:24px;color:var(--grey-700);margin-bottom:8px}
+  .checks li b{color:var(--grey-900)}
+  .warn{background:var(--red-surface);color:var(--red-deep);border-radius:16px;padding:16px;font-size:15px;line-height:22.5px;margin-top:16px}
+  .ok{background:var(--primary-surface);color:var(--primary-deep);border-radius:16px;padding:16px;font-size:15px;line-height:22.5px;margin-top:16px}
+  .ok b{color:var(--primary-deep)}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="doc-head">
+    <h1>한사나다 · 충실도 미리보기</h1>
+    <p>DESIGN.md의 토큰을 그대로 렌더한 화면입니다. 왼쪽은 <b>2026-09-02 toss.tech 실렌더에서 잰 원자</b>, 오른쪽은 그 원자로 조립한 <b>한사나다 실제 컴포넌트</b>입니다.</p>
+    <p>판단 기준은 하나입니다 — <b>“이 느낌 맞나?”</b> 나란히 놓고 보시려면 <a href="https://toss.tech" target="_blank" rel="noopener">toss.tech</a>를 옆 창에 열어 두세요.</p>
+  </div>
+
+  <div class="cols">
+
+    <!-- ============ 왼쪽: 레퍼런스 원자 ============ -->
+    <div class="panel">
+      <h2>레퍼런스에서 잰 원자</h2>
+      <p class="sub">toss.tech 실렌더 측정값 · 추정 아님</p>
+
+      <div class="blk">
+        <h3>색 — 파랑 하나, 회색 열 단계, 상태 셋</h3>
+        <div class="swatches">
+          <div class="sw"><i style="background:#3182F6"></i><b>primary</b><span>#3182F6</span></div>
+          <div class="sw"><i style="background:#1B64DA"></i><b>pressed</b><span>#1B64DA</span></div>
+          <div class="sw"><i style="background:#90C2FF"></i><b>soft</b><span>#90C2FF</span></div>
+          <div class="sw"><i style="background:#E8F3FF"></i><b>surface</b><span>#E8F3FF</span></div>
+          <div class="sw"><i style="background:#F04452"></i><b>red</b><span>#F04452</span></div>
+          <div class="sw"><i style="background:#03B26C"></i><b>green</b><span>#03B26C</span></div>
+        </div>
+        <div class="swatches" style="margin-top:10px">
+          <div class="sw"><i style="background:#191F28"></i><b>900</b><span>#191F28</span></div>
+          <div class="sw"><i style="background:#333D4B"></i><b>800</b><span>#333D4B</span></div>
+          <div class="sw"><i style="background:#4E5968"></i><b>700</b><span>#4E5968</span></div>
+          <div class="sw"><i style="background:#6B7684"></i><b>600</b><span>#6B7684</span></div>
+          <div class="sw"><i style="background:#8B95A1"></i><b>500</b><span>#8B95A1</span></div>
+          <div class="sw"><i style="background:#B0B8C1"></i><b>400</b><span>#B0B8C1</span></div>
+          <div class="sw"><i style="background:#D1D6DB"></i><b>300</b><span>#D1D6DB</span></div>
+          <div class="sw"><i style="background:#E5E8EB"></i><b>200</b><span>#E5E8EB</span></div>
+          <div class="sw"><i style="background:#F2F4F6"></i><b>100</b><span>#F2F4F6</span></div>
+          <div class="sw"><i style="background:#F9FAFB;box-shadow:inset 0 0 0 1px #E5E8EB"></i><b>50</b><span>#F9FAFB</span></div>
+        </div>
+        <p class="note">아래 <span style="color:#8B95A1;font-weight:600">#8B95A1</span> 부터는 흰 배경에서 3.04:1 — 글씨에 쓰지 않는다. 캡션은 <span style="color:#6B7684;font-weight:600">#6B7684</span>(4.62:1).</p>
+      </div>
+
+      <div class="blk">
+        <h3>타이포 — TDS 스케일 그대로 (자간 normal)</h3>
+        <div class="typescale">
+          <div style="font-size:30px;line-height:40px;font-weight:700">강원도 어디로 갈까요<small>display · 30/40 · 700</small></div>
+          <div style="font-size:24px;line-height:33px;font-weight:700">정동진 모래시계공원<small>headline-lg · 24/33 · 700</small></div>
+          <div style="font-size:17px;line-height:25.5px;font-weight:600">주문진 해수욕장<small>title-md · 17/25.5 · 600</small></div>
+          <div style="font-size:15px;line-height:22.5px;font-weight:400;color:var(--grey-600)">강원특별자치도 강릉시 주문진읍<small>body-md · 15/22.5 · 400</small></div>
+          <div style="font-size:13px;line-height:19.5px;font-weight:400;color:var(--grey-600)">한국관광공사 · 2026-08 기준<small>caption · 13/19.5 · 400</small></div>
+        </div>
+      </div>
+
+      <div class="blk">
+        <h3>라운드 — height ÷ 4</h3>
+        <div class="radius-row">
+          <div style="height:32px;border-radius:8px">32→8</div>
+          <div style="height:40px;border-radius:10px">40→10</div>
+          <div style="height:48px;border-radius:12px">48→12</div>
+          <div style="height:56px;border-radius:14px">56→14</div>
+        </div>
+      </div>
+
+      <div class="blk">
+        <h3>기본 원자</h3>
+        <div class="row" style="margin-bottom:16px">
+          <button class="btn48 btn-primary">저장하고 지도에서 보기</button>
+          <button class="btn48 btn-secondary">닫기</button>
+        </div>
+        <div class="row" style="margin-bottom:16px">
+          <button class="icon40" aria-label="저장">♡</button>
+          <button class="icon40 on" aria-label="저장됨">♥</button>
+          <div class="seg" role="tablist">
+            <button role="tab" aria-selected="true">인기 많은 순</button>
+            <button role="tab" aria-selected="false">덜 알려진 순</button>
+          </div>
+        </div>
+        <div class="row">
+          <span class="chip" aria-pressed="false">해수욕장</span>
+          <span class="chip" aria-pressed="true">벚꽃</span>
+          <span class="float-demo">이 지도 영역에서 검색</span>
+        </div>
+        <p class="note">그림자는 <b>떠 있는 것 하나</b>에만 — <code>0 2px 10px rgba(0,27,55,.1), 0 3px 20px rgba(2,32,71,.05)</code>. 나머지는 전부 그림자 0, 테두리 0.</p>
+      </div>
+    </div>
+
+    <!-- ============ 오른쪽: 한사나다 ============ -->
+    <div class="panel" style="padding:24px 12px">
+      <h2 style="padding:0 12px">한사나다 적용</h2>
+      <p class="sub" style="padding:0 12px">탐색 홈 · 375px</p>
+
+      <div class="phone">
+        <div class="phone-in">
+          <h1 class="h-title">강원도<br>어디로 갈까요</h1>
+
+          <div class="search">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke="#8B95A1" stroke-width="1.8"/><path d="M13.5 13.5L17 17" stroke="#8B95A1" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span>관광지 이름으로 찾기</span>
+          </div>
+
+          <div class="chips">
+            <button class="chip" aria-pressed="true">벚꽃</button>
+            <button class="chip" aria-pressed="false">꽃축제</button>
+            <button class="chip" aria-pressed="false">해수욕장</button>
+            <button class="chip" aria-pressed="false">계곡</button>
+            <button class="chip" aria-pressed="false">단풍</button>
+            <button class="chip" aria-pressed="false">억새</button>
+            <button class="chip" aria-pressed="false">눈꽃</button>
+            <button class="chip" aria-pressed="false">해돋이</button>
+          </div>
+
+          <!-- 방문 규모 지도 -->
+          <div class="map">
+            <svg viewBox="0 0 327 186" preserveAspectRatio="none" aria-label="강원 방문 규모 지도">
+              <defs>
+                <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+                  <rect width="7" height="7" fill="#FFFFFF"/>
+                  <line x1="0" y="0" x2="0" y2="7" stroke="#E5E8EB" stroke-width="4"/>
+                </pattern>
+              </defs>
+              <rect width="327" height="186" fill="#FFFFFF"/>
+              <path d="M0 0 H120 V64 H0 Z" fill="#E8F3FF" stroke="#8B95A1" stroke-width="1"/>
+              <path d="M120 0 H231 V78 H120 Z" fill="#90C2FF" stroke="#8B95A1" stroke-width="1"/>
+              <path d="M231 0 H327 V52 H231 Z" fill="#1B64DA" stroke="#8B95A1" stroke-width="1"/>
+              <path d="M231 52 H327 V132 H231 Z" fill="#3182F6" stroke="#8B95A1" stroke-width="1"/>
+              <path d="M0 64 H120 V186 H0 Z" fill="url(#hatch)" stroke="#8B95A1" stroke-width="1"/>
+              <path d="M120 78 H231 V186 H120 Z" fill="#E8F3FF" stroke="#8B95A1" stroke-width="1"/>
+              <path d="M231 132 H327 V186 H231 Z" fill="#90C2FF" stroke="#8B95A1" stroke-width="1"/>
+              <g>
+                <rect x="243" y="82" rx="11" width="62" height="22" fill="#FFFFFF"/>
+                <text x="274" y="97" text-anchor="middle" class="map-pill">강릉시</text>
+              </g>
+              <g>
+                <rect x="26" y="112" rx="11" width="68" height="22" fill="#FFFFFF"/>
+                <text x="60" y="127" text-anchor="middle" class="map-pill">정보 없음</text>
+              </g>
+            </svg>
+            <button class="map-cta">이 지도 영역에서 검색</button>
+            <div class="map-legend">
+              <b>지역 방문 규모</b>
+              <div class="legend-scale">
+                <i style="background:#E8F3FF"></i><i style="background:#90C2FF"></i><i style="background:#3182F6"></i><i style="background:#1B64DA"></i><i style="background:#FFF;box-shadow:inset 0 0 0 1px #D1D6DB"></i>
+              </div>
+              <span>적음 → 많음 · 사선은 정보 없음</span>
+              <span>한국관광공사 · 2026-05~07 기준</span>
+            </div>
+          </div>
+
+          <!-- 목록 -->
+          <div class="listhead">
+            <h2>이 지도 범위 24곳</h2>
+            <div class="seg" role="tablist">
+              <button role="tab" aria-selected="true">인기 많은 순</button>
+              <button role="tab" aria-selected="false">덜 알려진 순</button>
+            </div>
+          </div>
+          <p class="src">관광지 관심도는 내비게이션 목적지 집계예요. 실제 방문객 수가 아니에요 · 티맵 관광지 관심지점 · 2026-07 기준</p>
+
+          <!-- 카드 1: 한산 + 저장됨 -->
+          <div class="card">
+            <div class="thumb">
+              <svg viewBox="0 0 295 132" preserveAspectRatio="none"><rect width="295" height="132" fill="#E8F3FF"/><circle cx="232" cy="34" r="18" fill="#90C2FF"/><path d="M0 132 L74 74 L140 118 L206 62 L295 116 L295 132 Z" fill="#3182F6" opacity=".55"/><path d="M0 132 L58 96 L128 132 Z" fill="#1B64DA" opacity=".45"/></svg>
+            </div>
+            <button class="save on" aria-label="저장됨">♥</button>
+            <h3>주문진 해수욕장</h3>
+            <p class="addr">강원특별자치도 강릉시 주문진읍 해안로 1758</p>
+            <div class="badges">
+              <span class="badge b-quiet">이 장소 기준 한산</span>
+              <span class="badge b-normal">해수욕장</span>
+            </div>
+            <p class="cap">9월 14일 · 이 장소의 30일 예측 중 낮은 편<br>한국관광공사 방문 혼잡도 예측 · 오늘 06:00 기준</p>
+          </div>
+
+          <!-- 카드 2: 긴 한국어 스트레스 + 미산정 -->
+          <div class="card pressed">
+            <div class="thumb">
+              <svg viewBox="0 0 295 132" preserveAspectRatio="none"><rect width="295" height="132" fill="#F2F4F6"/><path d="M0 132 L88 46 L156 132 Z" fill="#D1D6DB"/><path d="M120 132 L204 58 L295 132 Z" fill="#B0B8C1"/><circle cx="54" cy="34" r="14" fill="#E5E8EB"/></svg>
+            </div>
+            <button class="save" aria-label="저장">♡</button>
+            <h3>평창 대관령 삼양목장 하늘목장 전망대 산책로 입구</h3>
+            <p class="addr">강원특별자치도 평창군 대관령면 꽃밭양지길 458-23 일원</p>
+            <div class="badges">
+              <span class="badge b-nodata">관심도 미산정</span>
+              <span class="badge b-nodata">예측 정보 없음</span>
+            </div>
+            <p class="cap">관심도 데이터가 없어요. 낮다는 뜻이 아니에요<br>티맵 관광지 관심지점 · 2026-07 기준</p>
+          </div>
+
+          <!-- 카드 3: 날짜 유연 -->
+          <div class="card">
+            <h3>남이섬</h3>
+            <p class="addr">강원특별자치도 춘천시 남산면 남이섬길 1</p>
+            <div class="qdate">
+              <b>9월 24일</b><span>이 장소에서 한산한 편</span>
+            </div>
+            <div class="badges">
+              <span class="badge b-busy">이 장소 기준 혼잡 · 9월 14일</span>
+            </div>
+            <p class="cap">한국관광공사 방문 혼잡도 예측 · 오늘 06:00 기준</p>
+          </div>
+
+          <!-- 현재 접근 혼잡 -->
+          <div class="detail">
+            <h4>현재 접근 혼잡</h4>
+            <div class="dot-row"><i class="dot d-smooth"></i>주변 도로 원활 · 평균 48km/h</div>
+            <div class="dot-row"><i class="dot d-slow"></i>진입로 서행 · 평균 21km/h</div>
+            <div class="dot-row"><i class="dot d-jam"></i>해안로 정체 · 평균 9km/h</div>
+            <div class="badges" style="margin-top:12px"><span class="badge b-nodata">현재 주차 정보 없음</span></div>
+            <p class="cap">국가교통정보센터 · 오늘 14:20 조회<br>미래 날짜의 인파와는 다른 정보예요</p>
+          </div>
+
+          <!-- 일반 검색 안내 -->
+          <div class="detail" style="background:var(--grey-100)">
+            <p style="margin:0;font-size:15px;line-height:22.5px;color:var(--grey-700)">‘속초 조용한 카페’는 지원 테마가 아니에요. 관광 정보에서 찾은 <b>일반 검색 결과</b>라 테마 적합성이나 대체지 추천을 보증하지 않아요.</p>
+          </div>
+
+          <!-- 상태들 -->
+          <div class="skel"><i class="s1"></i><i class="s2"></i><i class="s3"></i></div>
+
+          <div class="state s-empty">
+            저장한 장소가 아직 없어요.
+            <button class="btn48 btn-primary" style="width:100%">탐색 홈에서 둘러보기</button>
+          </div>
+
+          <div class="state s-error">
+            혼잡도 예측을 불러오지 못했어요. 다른 정보는 그대로 보여요.
+            <button class="btn48 btn-secondary" style="width:100%">다시 시도</button>
+          </div>
+        </div>
+
+        <div class="nav">
+          <a href="#" class="on"><span class="ic">◎</span>탐색 홈</a>
+          <a href="#"><span class="ic">♥</span>나만의 지도<span class="cnt">7</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 판정용 체크리스트 ============ -->
+  <div class="checks">
+    <h2>이 미리보기로 확인할 것</h2>
+    <ul>
+      <li><b>느낌이 토스인가</b> — 테두리 0, 그림자는 떠 있는 것에만, 파랑은 화면당 하나, 여백 48/24/8.</li>
+      <li><b>시금석에 걸리는 문구가 있나</b> — 굵은 글씨가 “장소를 평가”하지 않고 “데이터를 진술”하는지. (예: “이 지도 범위 24곳”, “이 장소 기준 한산”)</li>
+      <li><b>정보 없음이 낮은 값처럼 보이나</b> — 점선 배지와 사선 해칭이 채워진 것들과 구별되는지.</li>
+      <li><b>긴 한국어</b> — 두 번째 카드의 긴 이름이 2줄에서 잘리고, 주소는 1줄에서 잘리는지.</li>
+      <li><b>네 신호가 섞여 보이나</b> — 지도(면 파랑) · 정렬(색 없음) · 예측(배지) · 도로(점)가 서로 다른 형태인지.</li>
+    </ul>
+    <div class="ok">
+      <b>확인 완료 (2026-09-02) — 미확인 값 0</b><br>
+      서체 <b>Pretendard</b> · 주 버튼 <b>#1B64DA</b>(흰 글씨 5.41:1, AA 통과) · 눌림 <b>#194AA6</b>(8.17:1) · 혼잡 배지는 <b>한산만 강조</b> · 도로 서행 점 <b>#FF9200</b>.<br>
+      토스 블루 <b>#3182F6</b>은 <b>면 전용</b>으로 남습니다 — 지도 램프와 포커스 링. 글씨가 올라가는 자리에는 쓰지 않습니다.
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
