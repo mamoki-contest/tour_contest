@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "kind": "audit-slice-project-module",
+  "id": "common",
+  "version": 1,
+  "title": "공통 구조·테스트 계약",
+  "source": "auto-detected",
+  "enabled": true,
+  "risk": "low",
+  "selectors": {
+    "always": true
+  },
+  "checks": [
+    "scope-contract",
+    "test-collection",
+    "targeted-obligations"
+  ]
+}

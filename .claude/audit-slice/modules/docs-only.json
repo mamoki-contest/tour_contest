@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "audit-slice-project-module",
+  "id": "docs-only",
+  "version": 1,
+  "title": "문서 전용 변경",
+  "source": "auto-detected",
+  "enabled": true,
+  "risk": "low",
+  "selectors": {
+    "allChangesDocumentation": true
+  },
+  "checks": [
+    "document-structure",
+    "targeted-obligations"
+  ]
+}
