@@ -281,7 +281,9 @@ function TopBar({
   onOpenSheet: (sheet: OpenSheet) => void;
 }) {
   return (
-    <div className="absolute inset-x-0 top-0 z-10 px-gutter pt-[calc(env(safe-area-inset-top)+16px)] lg:static lg:px-6 lg:pt-6">
+    // 데스크톱에서는 지도 위에 떠 있지 않고 맨 위에 흐르되, 위치는 유지한다 —
+    // static 이면 뒤에 깔린 지도(absolute)가 칩 줄을 덮는다.
+    <div className="absolute inset-x-0 top-0 z-10 px-gutter pt-[calc(env(safe-area-inset-top)+16px)] lg:relative lg:px-6 lg:pt-6">
       <ConditionBar
         state={state}
         regionLabel={regionLabel}

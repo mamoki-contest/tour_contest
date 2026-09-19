@@ -144,8 +144,10 @@ export function BottomSheet({
         "fixed inset-x-0 bottom-0 z-20 flex flex-col rounded-t-xl bg-surface shadow-float",
         dragHeight === null ? "transition-[height] duration-200" : "",
         // 데스크톱에서는 시트가 아니라 우측 컬럼 — 고정 해제, 그림자·라운드 없음.
-        "lg:static lg:z-auto lg:h-auto lg:max-h-none lg:rounded-none lg:bg-transparent lg:shadow-none",
-        "lg:w-full lg:transition-none",
+        "lg:static lg:z-auto lg:max-h-none lg:rounded-none lg:bg-transparent lg:shadow-none",
+        // 컬럼이 화면 높이를 다 쓰고, 넘치는 목록은 컬럼 안에서 스크롤한다.
+        // `min-h-0` 이 없으면 flex 자식이 줄지 않아 스크롤 자체가 생기지 않는다.
+        "lg:h-full lg:min-h-0 lg:w-full lg:transition-none",
       ].join(" ")}
     >
       {legend ? (
@@ -182,8 +184,8 @@ export function BottomSheet({
 
       <div className="shrink-0 px-gutter lg:px-0">{header}</div>
 
-      {/* 하단 내비 높이만큼 여백을 남긴다 (U11) — 내비가 시트 위에 항상 뜨기 때문이다. */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-gutter pt-6 pb-[calc(64px+env(safe-area-inset-bottom))] lg:overflow-visible lg:px-0 lg:pb-0">
+      {/* 하단 내비 높이만큼 여백을 남긴다 (U11) — 내비는 데스크톱에서도 고정이다. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-gutter pt-6 pb-[calc(64px+env(safe-area-inset-bottom))]">
         {children}
       </div>
     </section>

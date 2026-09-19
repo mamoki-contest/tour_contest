@@ -31,7 +31,9 @@ export function MapZone({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="absolute inset-0 bg-grey-100 lg:static lg:h-full">
+    // 데스크톱에서도 위치 기준을 유지한다. static 으로 두면 안쪽 지도의 `absolute
+    // inset-0` 이 그리드 전체를 기준으로 삼아 우측 목록 컬럼까지 덮는다.
+    <div className="absolute inset-0 bg-grey-100 lg:relative lg:inset-auto lg:h-full">
       {/* 조건 요약 줄이 먼저 온다 — 모바일에서는 지도 위에 떠 있고, 데스크톱에서는 맨 위에 흐른다. */}
       {children}
       {status === "MAP_FAILED" ? (
