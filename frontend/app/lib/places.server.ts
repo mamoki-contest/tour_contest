@@ -166,16 +166,17 @@ export async function fetchPlaceList(
   }
 
   /*
-   * 백엔드가 `sort` 와 `dateMode` 를 함께 받으면 500 으로 답한다 (2026-09-19 확인).
-   * 둘 중 하나를 포기해야 한다면 예측이다 — 예측이 이 제품의 이유이고, 정렬은
-   * 없어도 목록이 선다. 정렬을 떼고 한 번 더 부른 뒤, 정렬이 빠졌다는 사실을
-   * `sortApplied` 로 화면까지 들고 간다. 조용히 공급자 순서를 보여주지 않는다.
+   * 정렬은 온라인 언급량 집계에 기대는 값이라, 그 집계가 흔들리면 목록 전체가
+   * 500 으로 넘어온다. 둘 중 하나를 포기해야 한다면 정렬이다 — 예측이 이 제품의
+   * 이유이고, 정렬은 없어도 목록이 선다. 정렬을 떼고 한 번 더 부른 뒤, 정렬이
+   * 빠졌다는 사실을 `sortApplied` 로 화면까지 들고 간다. 조용히 공급자 순서를
+   * 보여주면 사용자는 정렬이 걸린 목록으로 읽는다.
    */
   if (result.failure.status !== 500 || sort === null) {
     return { ok: false, failure: result.failure };
   }
 
-  console.error(`[places] 정렬과 날짜 탐색 동시 조회 실패: ${result.failure.cause}`);
+  console.error(`[places] 정렬 포함 조회 실패, 정렬 없이 재시도합니다: ${result.failure.cause}`);
   query.delete("sort");
 
   const retried = await fetchEnvelope<BackendListResponse>(
