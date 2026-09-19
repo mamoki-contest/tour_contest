@@ -1,0 +1,299 @@
+import { useCallback, useState } from "react";
+import {
+  useNavigate,
+  useRevalidator,
+  useSearchParams,
+  type ShouldRevalidateFunctionArgs,
+} from "react-router";
+
+import type { Route } from "./+types/home";
+import { BottomNav } from "../components/bottom-nav";
+import { BottomSheet } from "../components/bottom-sheet";
+import { ConditionBar } from "../components/condition-bar";
+import { SaveButton } from "../components/save-controls";
+import { useCollection } from "../lib/use-collection";
+import { DateSheet } from "../components/date-sheet";
+import { SearchSheet } from "../components/search-sheet";
+import { MapView, type MapLoadState } from "../components/map-view";
+import { MapLegend, MapZone, type MapStatus } from "../components/map-zone";
+import { PlaceCard, PlaceCardSkeleton } from "../components/place-card";
+import { InterestSourceNote, SortToggle } from "../components/sort-toggle";
+import { EmptyState, ErrorState, SecondaryButton } from "../components/states";
+import {
+  exploreHref,
+  parseExploreState,
+  type ExploreState,
+  type MapBounds,
+  type OpenSheet,
+  type SheetSnap,
+} from "../lib/explore-params";
+import { fetchPlaceList, usesSavedContractResponse } from "../lib/places.server";
+import { formatObservedAt } from "../lib/format";
+
+export function meta({}: Route.MetaArgs) {
+  return [
+    { title: "한사나다 — 강원 관광 탐색" },
+    {
+      name: "description",
+      content: "강원특별자치도 18개 시·군의 관광지를 살펴보는 탐색 홈.",
+    },
+  ];
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
+  // 조회 조건은 로더가 읽는다. 화면 상태(시트 스냅)는 컴포넌트가 URL에서 직접 읽는다.
+  const state = parseExploreState(new URL(request.url).searchParams);
+  const result = await fetchPlaceList(request.signal, state);
+
+  // 지도 SDK는 브라우저가 직접 불러야 하므로 이 키는 클라이언트로 내려간다.
+  // 관광 API 키와 달리 숨길 수 있는 값이 아니고, 도메인 등록이 보호 장치다.
+  const kakaoAppKey = process.env.KAKAO_MAP_APP_KEY ?? "";
+
+  if (!result.ok) {
+    // 원인은 서버 로그에만 남긴다 — 클라이언트로 내려보내지 않는다.
+    console.error(`[places] ${result.failure.dataName} 조회 실패: ${result.failure.cause}`);
+    return {
+      data: null,
+      savedContract: false,
+      kakaoAppKey,
+      error: { dataName: result.failure.dataName },
+    };
+  }
+
+  return {
+    data: result.data,
+    savedContract: usesSavedContractResponse(),
+    kakaoAppKey,
+    error: null,
+  };
+}
+
+/** 시트를 끌어올린 것만으로 목록을 다시 부르지 않는다 — 스냅은 화면 상태지 조회 조건이 아니다. */
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  const current = new URLSearchParams(currentUrl.search);
+  const next = new URLSearchParams(nextUrl.search);
+  current.delete("snap");
+  next.delete("snap");
+  if (currentUrl.pathname === nextUrl.pathname && current.toString() === next.toString()) {
+    return false;
+  }
+  return defaultShouldRevalidate;
+}
+
+export default function Home({ loaderData }: Route.ComponentProps) {
+  const { data, savedContract, kakaoAppKey, error } = loaderData;
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
+  const loading = revalidator.state !== "idle";
+
+  // 로더 데이터가 아니라 살아 있는 URL에서 읽는다 — 스냅 변화는 로더를 다시 돌리지 않는다.
+  const state = parseExploreState(searchParams);
+  const collection = useCollection();
+
+  // 키가 없으면 시도할 것도 없다. 있으면 SDK가 뜰 때까지 로딩으로 둔다.
+  const [mapLoad, setMapLoad] = useState<MapLoadState>(kakaoAppKey ? "LOADING" : "FAILED");
+
+  const searchThisArea = useCallback(
+    (bounds: MapBounds) => {
+      // 지도를 움직인 것만으로는 목록이 바뀌지 않는다 — 사용자가 눌러야 범위가 확정된다.
+      navigate(exploreHref({ ...state, bounds }), { preventScrollReset: true });
+    },
+    [navigate, state],
+  );
+
+  /** 시트 열기는 히스토리를 쌓는다 — 뒤로가기가 시트를 한 겹 닫는 비상구가 된다 (U9). */
+  const openSheet = useCallback(
+    (sheet: OpenSheet) => navigate(exploreHref({ ...state, sheet }), { preventScrollReset: true }),
+    [navigate, state],
+  );
+
+  const closeSheet = useCallback(
+    () => navigate(-1),
+    [navigate],
+  );
+
+  /** 시트가 확정한 조건은 열림 상태를 지우고 적용한다 — 시트가 닫히면서 결과가 보인다. */
+  const applyFromSheet = useCallback(
+    (next: Partial<ExploreState>) => {
+      navigate(exploreHref({ ...state, ...next, sheet: null }), {
+        replace: true,
+        preventScrollReset: true,
+      });
+    },
+    [navigate, state],
+  );
+
+  const setSnap = useCallback(
+    (snap: SheetSnap) => {
+      // 스냅 변화는 히스토리를 쌓지 않는다 — 뒤로가기가 시트 높이만 되돌리면 비상구가 막힌다.
+      navigate(exploreHref({ ...state, snap }), { replace: true, preventScrollReset: true });
+    },
+    [navigate, state],
+  );
+
+  /**
+   * 지도가 떠도 방문 규모 색상 레이어는 아직 없다 — 행정구역 경계와 방문 규모 데이터가
+   * 둘 다 있어야 그릴 수 있다. 없는 색을 지어내지 않고 범례가 그 사실을 말한다.
+   */
+  const mapStatus: MapStatus = mapLoad === "FAILED" ? "MAP_FAILED" : "REGION_FILL_FAILED";
+  // 지도를 못 띄우면 목록만으로 탐색할 수 있게 시트를 접히지 않게 한다 (U8).
+  const effectiveSnap = mapStatus === "MAP_FAILED" && state.snap === "peek" ? "middle" : state.snap;
+
+  return (
+    <div className="relative h-dvh overflow-hidden lg:grid lg:h-dvh lg:grid-cols-[1fr_480px] lg:gap-0 lg:overflow-hidden">
+      <MapZone status={mapStatus} onRetry={() => revalidator.revalidate()}>
+        {kakaoAppKey ? (
+          <MapView
+            appKey={kakaoAppKey}
+            places={data?.places ?? []}
+            onLoadStateChange={setMapLoad}
+            onSearchThisArea={searchThisArea}
+          />
+        ) : null}
+        <TopBar state={state} onOpenSheet={openSheet} />
+      </MapZone>
+
+      <BottomSheet
+        snap={effectiveSnap}
+        onSnapChange={setSnap}
+        // 지도가 안 뜨면 설명할 색도 없다. 범례를 남기면 실패 안내만 가린다.
+        legend={
+          mapStatus === "MAP_FAILED" ? null : (
+            <MapLegend status={mapStatus} periodLabel={null} source={null} />
+          )
+        }
+        header={<SheetHeader state={state} data={data} savedContract={savedContract} />}
+      >
+        {loading ? (
+          <PlaceList>
+            <PlaceCardSkeleton />
+            <PlaceCardSkeleton />
+            <PlaceCardSkeleton />
+          </PlaceList>
+        ) : error ? (
+          <ErrorState
+            dataName={error.dataName}
+            action={<SecondaryButton onClick={() => revalidator.revalidate()}>다시 시도</SecondaryButton>}
+          />
+        ) : !data || data.places.length === 0 ? (
+          <EmptyState
+            message="이 범위에 관광지가 없어요."
+            action={<SecondaryButton onClick={() => revalidator.revalidate()}>다시 불러오기</SecondaryButton>}
+          />
+        ) : (
+          <PlaceList>
+            {data.places.map((place) => (
+              <PlaceCard
+                key={place.placeId}
+                place={place}
+                dateMode={state.dateMode}
+                saveButton={
+                  <SaveButton
+                    saved={collection.isSaved(place.placeId)}
+                    placeName={place.name}
+                    onToggle={() =>
+                      collection.isSaved(place.placeId)
+                        ? collection.remove(place.placeId)
+                        : collection.save({
+                            placeId: place.placeId,
+                            name: place.name,
+                            address: place.address,
+                            photoUrl: place.photoUrl,
+                            coordinates: place.coordinates,
+                          })
+                    }
+                  />
+                }
+              />
+            ))}
+          </PlaceList>
+        )}
+      </BottomSheet>
+
+      <BottomNav savedCount={collection.snapshot.places.length} />
+
+      {state.sheet === "search" ? (
+        <SearchSheet
+          state={state}
+          onClose={closeSheet}
+          onApplyTheme={(theme) => applyFromSheet({ theme, query: null })}
+          onApplyQuery={(query) => applyFromSheet({ query, theme: null })}
+        />
+      ) : null}
+
+      {state.sheet === "date" ? (
+        <DateSheet
+          state={state}
+          onClose={closeSheet}
+          onApply={(dateMode, date) => applyFromSheet({ dateMode, date })}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 상단 컴팩트 바 (U12 → D5) — 지도 위에 뜨는 것은 조건 요약 칩 열뿐이다.
+ * 테마 칩 8개 전체는 검색 시트 안으로 접었다. 그래야 지도가 살아남는다.
+ */
+function TopBar({
+  state,
+  onOpenSheet,
+}: {
+  state: ExploreState;
+  onOpenSheet: (sheet: OpenSheet) => void;
+}) {
+  return (
+    <div className="absolute inset-x-0 top-0 z-10 px-gutter pt-[calc(env(safe-area-inset-top)+16px)] lg:static lg:px-6 lg:pt-6">
+      <ConditionBar
+        state={state}
+        regionLabel={null}
+        onOpenSearch={() => onOpenSheet("search")}
+        onOpenDate={() => onOpenSheet("date")}
+      />
+    </div>
+  );
+}
+
+function SheetHeader({
+  state,
+  data,
+  savedContract,
+}: {
+  state: ExploreState;
+  data: Route.ComponentProps["loaderData"]["data"];
+  savedContract: boolean;
+}) {
+  return (
+    <div className="pt-2 lg:px-6 lg:pt-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="type-headline-md text-grey-800">
+          {data ? `이 지도 범위 ${data.places.length}곳` : "이 지도 범위"}
+        </h2>
+        <SortToggle state={state} />
+      </div>
+
+      {/* 관심도 캡션은 시트 헤더에 산다. 지도 범례와 같은 시각 블록에 두지 않는다 (U15). */}
+      <InterestSourceNote
+        source={data?.source ?? null}
+        observedAt={formatObservedAt(data?.observedAt ?? null)}
+      />
+
+      {savedContract ? (
+        <p className="type-body-md mt-2 rounded-lg bg-grey-100 p-3 text-grey-700">
+          지금 보이는 목록은 실제 조회 결과가 아니라 화면 확인용으로 저장해 둔 계약 응답이에요.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** 카드 사이 24px — 리듬의 세 값(48 · 24 · 8) 밖으로 나가지 않는다. */
+function PlaceList({ children }: { children: React.ReactNode }) {
+  return <div className="grid gap-6">{children}</div>;
+}
