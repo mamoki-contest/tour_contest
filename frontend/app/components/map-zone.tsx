@@ -12,6 +12,11 @@ export type MapStatus =
   | "READY"
   /** 지도는 살아 있고 방문 규모 색상만 실패 — 목록은 그대로 산다. */
   | "REGION_FILL_FAILED"
+  /**
+   * 방문 규모 값은 받았지만 행정구역 경계 데이터가 없어 면을 칠할 수 없다.
+   * 실패와 구분한다 — 다시 시도해서 될 일이 아니고, 값은 탐색 범위 시트에 살아 있다.
+   */
+  | "REGION_FILL_UNSUPPORTED"
   /** 지도 자체를 띄우지 못함. 시트를 펼침으로 올려 목록만으로 탐색하게 한다 (U8). */
   | "MAP_FAILED";
 
@@ -67,6 +72,10 @@ export function MapLegend({
     <div className="rounded-lg bg-surface p-3 shadow-float">
       {status === "REGION_FILL_FAILED" ? (
         <p className="type-caption text-grey-700">방문 규모를 불러오지 못했어요</p>
+      ) : status === "REGION_FILL_UNSUPPORTED" ? (
+        <p className="type-caption text-grey-700">
+          지도에는 아직 방문 규모 색이 없어요 — 시·군별 규모는 탐색 범위에서 볼 수 있어요
+        </p>
       ) : belowRegionLevel ? (
         <p className="type-caption text-grey-700">
           이 확대 단계에는 방문 규모 색이 없어요 — 관광지 마커만 보여드려요

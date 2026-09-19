@@ -22,7 +22,7 @@ export type SheetSnap = "peek" | "middle" | "full";
  * 안 골랐다`를 표현할 수 없다. 그래서 열림 상태만 따로 `sheet`에 둔다 — 요구사항의
  * 핵심(히스토리 엔트리를 가져 뒤로가기가 한 겹씩 닫는다)은 그대로다.
  */
-export type OpenSheet = "search" | "date";
+export type OpenSheet = "region" | "search" | "date";
 
 /** 지도 경계 — 목록 조회의 탐색 범위. 사용자가 `이 지도 영역에서 검색`을 눌러야 확정된다. */
 export interface MapBounds {
@@ -65,7 +65,7 @@ export const DEFAULT_EXPLORE_STATE: ExploreState = {
 
 const SORTS: SortOrder[] = ["INTEREST_DESC", "INTEREST_ASC"];
 const SNAPS: SheetSnap[] = ["peek", "middle", "full"];
-const SHEETS: OpenSheet[] = ["search", "date"];
+const SHEETS: OpenSheet[] = ["region", "search", "date"];
 
 function text(params: URLSearchParams, key: string): string | null {
   const raw = params.get(key);

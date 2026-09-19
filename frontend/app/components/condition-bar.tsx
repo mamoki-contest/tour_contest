@@ -17,12 +17,15 @@ import {
 export function ConditionBar({
   state,
   regionLabel,
+  onOpenRegion,
   onOpenSearch,
   onOpenDate,
 }: {
   state: ExploreState;
   /** 선택된 시·군 이름. 없으면 `강원 전체`. */
   regionLabel: string | null;
+  /** 탐색 범위 시트를 여는 동작. 없으면 칩이 현재 값만 말하는 상태 표시로 남는다. */
+  onOpenRegion?: () => void;
   /** 검색 시트를 여는 동작. 아직 없으면 칩이 현재 값만 말하는 상태 표시로 남는다. */
   onOpenSearch?: () => void;
   /** 날짜 시트를 여는 동작. 없으면 마찬가지로 상태 표시로 남는다. */
@@ -37,7 +40,7 @@ export function ConditionBar({
     <div className="flex gap-2 overflow-x-auto" aria-label="적용된 탐색 조건">
       {/* 지도 경계가 확정돼 있으면 `강원 전체`라고 말하면 안 된다 — 실제 조회 범위가 다르다. */}
       <ConditionChip
-        onClick={onOpenSearch}
+        onClick={onOpenRegion}
         label="탐색 범위"
         value={regionLabel ?? (state.bounds ? "이 지도 범위" : "강원 전체")}
       />

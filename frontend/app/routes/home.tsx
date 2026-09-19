@@ -13,6 +13,7 @@ import { ConditionBar } from "../components/condition-bar";
 import { SaveButton } from "../components/save-controls";
 import { useCollection } from "../lib/use-collection";
 import { DateSheet } from "../components/date-sheet";
+import { RegionSheet } from "../components/region-sheet";
 import { SearchSheet } from "../components/search-sheet";
 import { MapView, type MapLoadState } from "../components/map-view";
 import { MapLegend, MapZone, type MapStatus } from "../components/map-zone";
@@ -28,7 +29,8 @@ import {
   type SheetSnap,
 } from "../lib/explore-params";
 import { fetchPlaceList } from "../lib/places.server";
-import { formatObservedAt } from "../lib/format";
+import { fetchRegionVisitScale } from "../lib/regions.server";
+import { formatObservedAt, formatVisitPeriod } from "../lib/format";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -43,7 +45,17 @@ export function meta({}: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   // 조회 조건은 로더가 읽는다. 화면 상태(시트 스냅)는 컴포넌트가 URL에서 직접 읽는다.
   const state = parseExploreState(new URL(request.url).searchParams);
-  const result = await fetchPlaceList(request.signal, state);
+
+  // 두 조회는 서로를 기다릴 이유가 없다 — 지역 방문 규모가 늦다고 목록이 늦지 않게 한다.
+  const [result, regions] = await Promise.all([
+    fetchPlaceList(request.signal, state),
+    fetchRegionVisitScale(request.signal),
+  ]);
+
+  if (!regions.ok) {
+    console.error(`[regions] ${regions.failure.dataName} 조회 실패: ${regions.failure.cause}`);
+  }
+  const regionData = regions.ok ? regions.data : null;
 
   // 지도 SDK는 브라우저가 직접 불러야 하므로 이 키는 클라이언트로 내려간다.
   // 관광 API 키와 달리 숨길 수 있는 값이 아니고, 도메인 등록이 보호 장치다.
@@ -52,10 +64,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!result.ok) {
     // 원인은 서버 로그에만 남긴다 — 클라이언트로 내려보내지 않는다.
     console.error(`[places] ${result.failure.dataName} 조회 실패: ${result.failure.cause}`);
-    return { data: null, kakaoAppKey, error: { dataName: result.failure.dataName } };
+    return {
+      data: null,
+      regions: regionData,
+      kakaoAppKey,
+      error: { dataName: result.failure.dataName },
+    };
   }
 
-  return { data: result.data, kakaoAppKey, error: null };
+  return { data: result.data, regions: regionData, kakaoAppKey, error: null };
 }
 
 /** 시트를 끌어올린 것만으로 목록을 다시 부르지 않는다 — 스냅은 화면 상태지 조회 조건이 아니다. */
@@ -75,7 +92,7 @@ export function shouldRevalidate({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { data, kakaoAppKey, error } = loaderData;
+  const { data, regions, kakaoAppKey, error } = loaderData;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -84,6 +101,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   // 로더 데이터가 아니라 살아 있는 URL에서 읽는다 — 스냅 변화는 로더를 다시 돌리지 않는다.
   const state = parseExploreState(searchParams);
   const collection = useCollection();
+
+  // 코드만으로는 시·군 이름을 알 수 없다 — 이름은 방문 규모 목록에서 온다.
+  const regionLabel =
+    regions?.regions.find((region) => region.sigunguCode === state.regionCode)?.name ?? null;
 
   // 키가 없으면 시도할 것도 없다. 있으면 SDK가 뜰 때까지 로딩으로 둔다.
   const [mapLoad, setMapLoad] = useState<MapLoadState>(kakaoAppKey ? "LOADING" : "FAILED");
@@ -130,7 +151,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
    * 지도가 떠도 방문 규모 색상 레이어는 아직 없다 — 행정구역 경계와 방문 규모 데이터가
    * 둘 다 있어야 그릴 수 있다. 없는 색을 지어내지 않고 범례가 그 사실을 말한다.
    */
-  const mapStatus: MapStatus = mapLoad === "FAILED" ? "MAP_FAILED" : "REGION_FILL_FAILED";
+  const mapStatus: MapStatus =
+    mapLoad === "FAILED"
+      ? "MAP_FAILED"
+      : regions === null
+        ? "REGION_FILL_FAILED"
+        : "REGION_FILL_UNSUPPORTED";
   // 지도를 못 띄우면 목록만으로 탐색할 수 있게 시트를 접히지 않게 한다 (U8).
   const effectiveSnap = mapStatus === "MAP_FAILED" && state.snap === "peek" ? "middle" : state.snap;
 
@@ -145,7 +171,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             onSearchThisArea={searchThisArea}
           />
         ) : null}
-        <TopBar state={state} onOpenSheet={openSheet} />
+        <TopBar state={state} regionLabel={regionLabel} onOpenSheet={openSheet} />
       </MapZone>
 
       <BottomSheet
@@ -154,7 +180,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         // 지도가 안 뜨면 설명할 색도 없다. 범례를 남기면 실패 안내만 가린다.
         legend={
           mapStatus === "MAP_FAILED" ? null : (
-            <MapLegend status={mapStatus} periodLabel={null} source={null} />
+            <MapLegend
+              status={mapStatus}
+              periodLabel={formatVisitPeriod(regions?.periodStart ?? null, regions?.periodEnd ?? null)}
+              source={regions?.source ?? null}
+            />
           )
         }
         header={<SheetHeader state={state} data={data} />}
@@ -207,6 +237,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
       <BottomNav savedCount={collection.snapshot.places.length} />
 
+      {state.sheet === "region" ? (
+        <RegionSheet
+          selected={state.regionCode}
+          data={regions}
+          onClose={closeSheet}
+          // 시·군을 고르면 지도 경계 조건은 지운다 — 두 범위가 겹치면 어느 쪽인지 알 수 없다.
+          onSelect={(regionCode) => applyFromSheet({ regionCode, bounds: null })}
+        />
+      ) : null}
+
       {state.sheet === "search" ? (
         <SearchSheet
           state={state}
@@ -233,16 +273,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
  */
 function TopBar({
   state,
+  regionLabel,
   onOpenSheet,
 }: {
   state: ExploreState;
+  regionLabel: string | null;
   onOpenSheet: (sheet: OpenSheet) => void;
 }) {
   return (
     <div className="absolute inset-x-0 top-0 z-10 px-gutter pt-[calc(env(safe-area-inset-top)+16px)] lg:static lg:px-6 lg:pt-6">
       <ConditionBar
         state={state}
-        regionLabel={null}
+        regionLabel={regionLabel}
+        onOpenRegion={() => onOpenSheet("region")}
         onOpenSearch={() => onOpenSheet("search")}
         onOpenDate={() => onOpenSheet("date")}
       />

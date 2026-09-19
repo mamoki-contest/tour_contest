@@ -260,3 +260,40 @@ export interface SearchResponse {
 export type SearchResult =
   | { ok: true; data: SearchResponse }
   | { ok: false; failure: PlaceListFailure };
+
+/* ─────────────────────────  지역 방문 규모 (슬라이스 #3)  ───────────────────────── */
+
+/**
+ * 같은 기준 기간 안에서 **조회한 시·군끼리** 견준 상대 구간.
+ *
+ * 절대 등급이 아니다 — 다른 기간이나 다른 지역 집합의 구간과 비교하지 않는다.
+ * 그리고 이것은 지역 단위 방문 규모지 관광지의 혼잡도가 아니다 (ADR-0006).
+ */
+export type RegionVisitLevel = "VERY_HIGH" | "HIGH" | "MEDIUM" | "LOW" | "VERY_LOW";
+
+export interface RegionVisitScale {
+  /** 백엔드 관광지 조회가 쓰는 시·군구 코드. 탐색 범위 조건이 되는 값이다. */
+  sigunguCode: string;
+  /** 행정구역 코드. 지도 경계 데이터와 잇는 값이다. */
+  lawdCode: string | null;
+  name: string;
+  /** 외지인·외국인 방문자 수 추정치. 현지인은 빠져 있고, 실제 관광객 수가 아니다. */
+  visitorCount: number | null;
+  /** 값을 얻지 못한 시·군은 null이다. 최하 구간으로 칠하지 않는다. */
+  level: RegionVisitLevel | null;
+  rank: number | null;
+  status: DataStatus;
+}
+
+export interface RegionVisitScaleResponse {
+  regions: RegionVisitScale[];
+  /** 기준 기간 시작 (YYYY-MM-DD). 공급자 공개가 늦어 오늘과 한 달 가까이 떨어져 있다. */
+  periodStart: string | null;
+  periodEnd: string | null;
+  status: DataStatus;
+  source: string | null;
+}
+
+export type RegionVisitScaleResult =
+  | { ok: true; data: RegionVisitScaleResponse }
+  | { ok: false; failure: PlaceListFailure };

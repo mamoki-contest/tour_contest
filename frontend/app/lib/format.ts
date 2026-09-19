@@ -34,3 +34,14 @@ export function formatObservedAt(observedAt: string | null): string {
 export function formatSourceCaption(source: string | null, observedAt: string | null): string {
   return [source ?? "출처 없음", formatObservedAt(observedAt)].join(" · ");
 }
+
+/**
+ * 방문 규모의 기준 기간을 캡션 한 줄로 옮긴다.
+ *
+ * 공급자가 최근 데이터를 바로 공개하지 않아 이 기간은 오늘과 한 달 가까이 떨어져
+ * 있다. 그래서 기간을 숨기지 않는다 — 언제를 센 값인지가 값만큼 중요하다.
+ */
+export function formatVisitPeriod(start: string | null, end: string | null): string | null {
+  if (!start || !end) return null;
+  return `${start.replaceAll("-", ".")} ~ ${end.replaceAll("-", ".")} 기준`;
+}
