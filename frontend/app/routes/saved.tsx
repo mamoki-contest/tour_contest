@@ -1,12 +1,15 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useFetcher } from "react-router";
 
 import type { Route } from "./+types/saved";
 import { BottomNav } from "../components/bottom-nav";
 import { SaveEditSheet } from "../components/save-controls";
 import { ErrorState } from "../components/states";
 import { useCollection } from "../lib/use-collection";
+import type { CollectionItemStatus } from "../lib/contract";
 import type { SavedPlace } from "../lib/personal-collection";
+import { NoDataBadge } from "../components/badges";
+import type { loader as lookupLoader } from "./saved-lookup";
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "나만의 지도 — 한사나다" }];
@@ -22,6 +25,7 @@ export default function SavedRoute() {
   const { snapshot, loaded, save, remove } = useCollection();
   const [editing, setEditing] = useState<SavedPlace | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const freshness = useFreshness(snapshot.places.map((place) => place.placeId));
 
   const allTags = [...new Set(snapshot.places.flatMap((place) => place.tags))];
   const visible = tagFilter
@@ -123,6 +127,8 @@ export default function SavedRoute() {
                       </p>
                     ) : null}
 
+                    <FreshnessNote status={freshness.get(place.placeId) ?? null} />
+
                     <button
                       type="button"
                       onClick={() => setEditing(place)}
@@ -179,5 +185,49 @@ function TagFilterChip({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * 저장해 둔 식별자로 지금 상태를 묻는다.
+ *
+ * 컬렉션은 이 브라우저에만 있으므로 서버 로더가 먼저 알 수 없다 — 목록을 읽은 뒤에
+ * 화면이 식별자를 들고 물으러 간다. 답이 늦거나 실패해도 저장 목록은 그대로 선다.
+ */
+function useFreshness(placeIds: string[]): Map<string, CollectionItemStatus> {
+  const fetcher = useFetcher<typeof lookupLoader>();
+  // 같은 목록으로 다시 묻지 않게, 식별자 묶음이 바뀔 때만 조회한다.
+  const key = placeIds.join(",");
+
+  useEffect(() => {
+    if (key === "") return;
+    const query = new URLSearchParams();
+    for (const id of key.split(",")) query.append("id", id);
+    fetcher.load(`/saved/lookup?${query.toString()}`);
+    // fetcher는 매 렌더 새 객체라 의존성에 넣으면 조회가 멈추지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return new Map((fetcher.data?.items ?? []).map((item) => [item.placeId, item.status]));
+}
+
+/**
+ * 확인 결과 한 줄.
+ *
+ * `확인하지 못했다`와 `없어졌다`를 절대 같은 말로 쓰지 않는다 — 공급자를 못 부른 것을
+ * 사라진 것으로 표시하면, 멀쩡히 저장해 둔 곳을 지우라고 권하게 된다.
+ * 정상일 때는 아무 말도 하지 않는다. 모든 카드에 `정상`을 붙이면 예외가 묻힌다.
+ */
+function FreshnessNote({ status }: { status: CollectionItemStatus | null }) {
+  if (status === null || status === "AVAILABLE") return null;
+
+  return (
+    <p className="mt-2">
+      {status === "NOT_FOUND" ? (
+        <NoDataBadge>공급자에 더 이상 없는 곳이에요 — 정리해도 괜찮아요</NoDataBadge>
+      ) : (
+        <NoDataBadge>이번에는 확인하지 못했어요 — 사라진 곳은 아니에요</NoDataBadge>
+      )}
+    </p>
   );
 }

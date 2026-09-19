@@ -297,3 +297,35 @@ export interface RegionVisitScaleResponse {
 export type RegionVisitScaleResult =
   | { ok: true; data: RegionVisitScaleResponse }
   | { ok: false; failure: PlaceListFailure };
+
+/* ─────────────────────────  저장된 식별자 재조회 (슬라이스 #9)  ───────────────────────── */
+
+/**
+ * 저장해 둔 한 곳의 지금 상태.
+ *
+ * `UNAVAILABLE` 을 `NOT_FOUND` 처럼 다루지 않는다 — 저장한 곳이 사라진 것처럼 보이고
+ * 지우라는 안내까지 받게 된다. 다시 조회하면 돌아오는 값이다.
+ */
+export type CollectionItemStatus =
+  /** 최신 표시정보를 얻었다. */
+  | "AVAILABLE"
+  /** 공급자에 더 이상 없는 식별자다. 저장 목록에서 정리해도 된다. */
+  | "NOT_FOUND"
+  /** 공급자를 부르지 못해 **이번에는** 확인하지 못했다. 사라진 것이 아니다. */
+  | "UNAVAILABLE";
+
+export interface CollectionItem {
+  placeId: string;
+  status: CollectionItemStatus;
+  /** 최신 표시정보. `AVAILABLE`이 아니면 null이고, 저장 당시 정보가 그 자리를 지킨다. */
+  place: Place | null;
+}
+
+export interface CollectionLookupResponse {
+  items: CollectionItem[];
+  source: string | null;
+}
+
+export type CollectionLookupResult =
+  | { ok: true; data: CollectionLookupResponse }
+  | { ok: false; failure: PlaceListFailure };
