@@ -1,168 +1,190 @@
 import type {
-  CrowdLevel,
-  DataStatus,
   Place,
-  PlaceForecastSummary,
   PlaceListResponse,
   PlaceListResult,
-  Sourced,
+  PlaceListSearch,
+  SearchResultType,
 } from "./contract";
 import { DEFAULT_EXPLORE_STATE, type ExploreState } from "./explore-params";
-import { savedContractResponse } from "./places.fixture";
+import {
+  fetchEnvelope,
+  toDataStatus,
+  toPlace,
+  text,
+  num,
+  type BackendAttraction,
+  type BackendDataStatus,
+} from "./backend.server";
 
 /**
  * 관광지 목록 조회. 브라우저가 아니라 서버(로더)에서만 실행된다 — 백엔드 주소와
  * 자격 정보가 클라이언트 번들에 들어가지 않게 하기 위해서다.
+ *
+ * 탐색 조건에 테마나 검색어가 있으면 검색 입구(`/attractions/search`)로,
+ * 없으면 목록 입구(`/attractions`)로 간다. 두 입구는 **같은 화면을 그리지만
+ * 보증이 다르다** — 그래서 결과 유형을 지우지 않고 그대로 들고 온다 (ADR-0003).
  */
 
-const LIST_TIMEOUT_MS = 8_000;
+const PAGE_SIZE = 20;
+const LIST_DATA_NAME = "관광지 목록";
 
-const DATA_STATUSES: DataStatus[] = ["OK", "STALE", "MISSING", "UNAVAILABLE"];
-
-function asStatus(raw: unknown): DataStatus {
-  return DATA_STATUSES.includes(raw as DataStatus) ? (raw as DataStatus) : "MISSING";
+interface BackendListResponse {
+  items?: BackendAttraction[] | null;
+  totalCount?: number | null;
+  page?: number | null;
+  size?: number | null;
+  sort?: string | null;
+  dataStatus?: BackendDataStatus | null;
+  collectedAt?: string | null;
+  source?: string | null;
 }
 
-function asText(raw: unknown): string | null {
-  return typeof raw === "string" && raw.trim() !== "" ? raw : null;
+interface BackendSearchResponse extends BackendListResponse {
+  resultType?: SearchResultType | null;
+  appliedTheme?: { code?: string | null; name?: string | null } | null;
+  appliedQuery?: string | null;
+  suggestedThemes?: ({ code?: string | null; name?: string | null } | null)[] | null;
 }
 
-function asSourcedNumber(raw: unknown): Sourced<number> {
-  const record = (raw ?? {}) as Record<string, unknown>;
-  const value = typeof record.value === "number" ? record.value : null;
-  return {
-    value,
-    // 값이 없는데 status가 없으면 결측이다. 낮은 값으로 해석하지 않는다.
-    status: record.status === undefined && value === null ? "MISSING" : asStatus(record.status),
-    source: asText(record.source),
-    observedAt: asText(record.observedAt),
-  };
-}
-
-const CROWD_LEVELS: CrowdLevel[] = ["QUIET", "NORMAL", "BUSY"];
-
-function asForecastSummary(raw: unknown): PlaceForecastSummary {
-  const record = (raw ?? {}) as Record<string, unknown>;
-  const level = CROWD_LEVELS.includes(record.selectedDateLevel as CrowdLevel)
-    ? (record.selectedDateLevel as CrowdLevel)
-    : null;
-  const quietDate = asText(record.quietDate);
-
-  return {
-    selectedDateLevel: level,
-    quietDate,
-    // 둘 다 없는데 status가 없으면 결측이다. 예측이 좋다는 뜻으로 읽히지 않게 한다.
-    status:
-      record.status === undefined && level === null && quietDate === null
-        ? "MISSING"
-        : asStatus(record.status),
-    source: asText(record.source),
-    observedAt: asText(record.observedAt),
-  };
-}
-
-/**
- * 공급자 응답이 계약을 벗어나도 화면이 값을 지어내지 않도록 좁혀서 받는다.
- * 상세와 연관 장소도 같은 규칙으로 읽으라고 밖으로 연다.
- */
-export function normalizePlaceFields(raw: unknown): Place | null {
-  const record = (raw ?? {}) as Record<string, unknown>;
-  const placeId = asText(record.placeId);
-  const name = asText(record.name);
-  if (!placeId || !name) return null;
-
-  const coordinates = (record.coordinates ?? null) as Record<string, unknown> | null;
-  const latitude = coordinates && typeof coordinates.latitude === "number" ? coordinates.latitude : null;
-  const longitude = coordinates && typeof coordinates.longitude === "number" ? coordinates.longitude : null;
-
-  return {
-    placeId,
-    name,
-    photoUrl: asText(record.photoUrl),
-    address: asText(record.address),
-    coordinates: latitude !== null && longitude !== null ? { latitude, longitude } : null,
-    category: asText(record.category),
-    regionCenterRank: asSourcedNumber(record.regionCenterRank),
-    interest: asSourcedNumber(record.interest),
-    forecast: asForecastSummary(record.forecast),
-  };
-}
-
-function toListResponse(raw: unknown): PlaceListResponse {
-  const record = (raw ?? {}) as Record<string, unknown>;
-  const places = Array.isArray(record.places)
-    ? record.places.map(normalizePlaceFields).filter((place): place is Place => place !== null)
+function toPlaces(items: BackendAttraction[] | null | undefined): Place[] {
+  return Array.isArray(items)
+    ? items.map(toPlace).filter((place): place is Place => place !== null)
     : [];
+}
 
-  return {
-    places,
-    status: asStatus(record.status),
-    source: asText(record.source),
-    observedAt: asText(record.observedAt),
-  };
+/** 정렬 방향을 백엔드 이름으로 옮긴다. 화면은 `인기 많은 순`, 백엔드는 온라인 언급량이다. */
+function toBackendSort(sort: ExploreState["sort"]): string {
+  return sort === "INTEREST_ASC" ? "ONLINE_MENTION_ASC" : "ONLINE_MENTION_DESC";
+}
+
+/** 탐색 조건을 목록 질의로 옮긴다. 시트 스냅 같은 화면 상태는 보내지 않는다. */
+function toListQuery(state: ExploreState): URLSearchParams {
+  const query = new URLSearchParams();
+  if (state.regionCode) query.set("sigunguCode", state.regionCode);
+  query.set("size", String(PAGE_SIZE));
+  query.set("sort", toBackendSort(state.sort));
+
+  // 날짜 모드를 보내야 항목마다 `visitTiming` 이 따라온다. 확정 모드만 날짜를 함께 보낸다.
+  if (state.dateMode === "FIXED" && state.date) {
+    query.set("dateMode", "FIXED");
+    query.set("visitDate", state.date);
+  } else {
+    query.set("dateMode", "FLEXIBLE");
+  }
+
+  // 지도 경계는 네 값이 함께여야 뜻을 가진다 — 반쯤 보내지 않는다.
+  if (state.bounds) {
+    query.set("minLatitude", String(state.bounds.swLat));
+    query.set("maxLatitude", String(state.bounds.neLat));
+    query.set("minLongitude", String(state.bounds.swLng));
+    query.set("maxLongitude", String(state.bounds.neLng));
+  }
+
+  return query;
 }
 
 /**
- * 백엔드가 아직 배포되지 않은 환경에서 카드 구조를 확인하기 위한 경로.
- * 저장된 계약 응답임을 화면이 사용자에게 밝힌다 — 실제 데이터로 위장하지 않는다.
+ * 검색은 테마와 자유 검색어를 **같은 입구**로 받는다. 어느 쪽이 적용됐는지는
+ * 프론트가 판정하지 않고 백엔드의 `resultType` 이 말한다 — 동의어·오타 정규화가
+ * 백엔드에 있기 때문이다 (themes.ts).
+ *
+ * 이 입구는 날짜 탐색과 정렬을 받지 않는다. 그래서 검색 결과 카드에는
+ * 예측 요약이 비어 있고, 화면은 그 자리를 `예측 정보 없음`으로 채운다.
  */
-export function usesSavedContractResponse(): boolean {
-  return !process.env.API_BASE_URL && process.env.PLACES_SAVED_CONTRACT === "true";
+function toSearchQuery(state: ExploreState, term: string): URLSearchParams {
+  const query = new URLSearchParams();
+  query.set("query", term);
+  if (state.regionCode) query.set("sigunguCode", state.regionCode);
+  query.set("size", String(PAGE_SIZE));
+  return query;
 }
 
-/** 탐색 조건을 백엔드 질의로 옮긴다. 시트 스냅 같은 화면 상태는 보내지 않는다. */
-function toQuery(state: ExploreState): URLSearchParams {
-  const query = new URLSearchParams();
-  if (state.regionCode) query.set("region", state.regionCode);
-  if (state.theme) query.set("theme", state.theme);
-  if (state.query) query.set("q", state.query);
-  query.set("dateMode", state.dateMode);
-  if (state.dateMode === "FIXED" && state.date) query.set("date", state.date);
-  query.set("sort", state.sort);
-  return query;
+function themeName(theme: { name?: string | null } | null | undefined): string | null {
+  return text(theme?.name);
+}
+
+function toSearchInfo(data: BackendSearchResponse): PlaceListSearch {
+  return {
+    // 유형을 모르면 보증이 약한 쪽으로 읽는다 — 없는 자격을 붙이지 않는다.
+    resultType: data.resultType === "SUPPORTED_THEME" ? "SUPPORTED_THEME" : "GENERAL_SEARCH",
+    appliedTheme: themeName(data.appliedTheme),
+    appliedQuery: text(data.appliedQuery),
+    suggestedThemes: Array.isArray(data.suggestedThemes)
+      ? data.suggestedThemes.map(themeName).filter((name): name is string => name !== null)
+      : [],
+  };
+}
+
+function toListResponse(
+  data: BackendListResponse,
+  search: PlaceListSearch | null,
+  requestedSort: string | null,
+): PlaceListResponse {
+  return {
+    places: toPlaces(data.items),
+    totalCount: num(data.totalCount),
+    search,
+    // 백엔드가 적용한 정렬을 그대로 되돌려준다. 요청과 다르면 적용되지 않은 것이다.
+    sortApplied: requestedSort !== null && data.sort === requestedSort,
+    status: toDataStatus(data.dataStatus),
+    source: text(data.source),
+    observedAt: text(data.collectedAt),
+  };
 }
 
 export async function fetchPlaceList(
   signal?: AbortSignal,
   state: ExploreState = DEFAULT_EXPLORE_STATE,
 ): Promise<PlaceListResult> {
-  if (usesSavedContractResponse()) {
-    return { ok: true, data: toListResponse(savedContractResponse) };
+  // 테마가 우선이다 — 시트가 테마를 적용할 때 검색어를 비우므로 둘이 함께 오지 않는다.
+  const term = state.theme ?? state.query;
+
+  if (term) {
+    // 검색 입구는 정렬을 받지 않는다 — 요청하지 않았으니 적용 여부를 따질 것도 없다.
+    const result = await fetchEnvelope<BackendSearchResponse>(
+      "/api/v1/attractions/search",
+      toSearchQuery(state, term),
+      LIST_DATA_NAME,
+      signal,
+    );
+    return result.ok
+      ? { ok: true, data: toListResponse(result.data, toSearchInfo(result.data), null) }
+      : { ok: false, failure: result.failure };
   }
 
-  const baseUrl = process.env.API_BASE_URL;
-  if (!baseUrl) {
-    return {
-      ok: false,
-      failure: { dataName: "관광지 목록", cause: "API_BASE_URL이 설정되지 않았습니다." },
-    };
+  const query = toListQuery(state);
+  const sort = query.get("sort");
+
+  const result = await fetchEnvelope<BackendListResponse>(
+    "/api/v1/attractions",
+    query,
+    LIST_DATA_NAME,
+    signal,
+  );
+  if (result.ok) {
+    return { ok: true, data: toListResponse(result.data, null, sort) };
   }
 
-  const endpoint = new URL("/api/places", baseUrl);
-  endpoint.search = toQuery(state).toString();
-
-  const timeout = AbortSignal.timeout(LIST_TIMEOUT_MS);
-  try {
-    const response = await fetch(endpoint, {
-      headers: { accept: "application/json" },
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-    });
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        failure: { dataName: "관광지 목록", cause: `백엔드 응답 ${response.status}` },
-      };
-    }
-
-    return { ok: true, data: toListResponse(await response.json()) };
-  } catch (error) {
-    return {
-      ok: false,
-      failure: {
-        dataName: "관광지 목록",
-        cause: error instanceof Error ? error.message : String(error),
-      },
-    };
+  /*
+   * 백엔드가 `sort` 와 `dateMode` 를 함께 받으면 500 으로 답한다 (2026-09-19 확인).
+   * 둘 중 하나를 포기해야 한다면 예측이다 — 예측이 이 제품의 이유이고, 정렬은
+   * 없어도 목록이 선다. 정렬을 떼고 한 번 더 부른 뒤, 정렬이 빠졌다는 사실을
+   * `sortApplied` 로 화면까지 들고 간다. 조용히 공급자 순서를 보여주지 않는다.
+   */
+  if (result.failure.status !== 500 || sort === null) {
+    return { ok: false, failure: result.failure };
   }
+
+  console.error(`[places] 정렬과 날짜 탐색 동시 조회 실패: ${result.failure.cause}`);
+  query.delete("sort");
+
+  const retried = await fetchEnvelope<BackendListResponse>(
+    "/api/v1/attractions",
+    query,
+    LIST_DATA_NAME,
+    signal,
+  );
+  return retried.ok
+    ? { ok: true, data: toListResponse(retried.data, null, null) }
+    : { ok: false, failure: retried.failure };
 }

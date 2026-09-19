@@ -64,8 +64,33 @@ export interface Place {
   forecast: PlaceForecastSummary;
 }
 
+/**
+ * 목록이 검색으로 왔을 때 따라오는 정보. 무테마·무검색 목록이면 null이다.
+ *
+ * 결과 유형을 화면까지 들고 오는 이유는 두 유형의 **신뢰 수준이 다르기** 때문이다
+ * — 지원 테마 결과만 추천 자격을 통과했다 (ADR-0003).
+ */
+export interface PlaceListSearch {
+  resultType: SearchResultType;
+  /** 적용된 지원 테마. 일반 검색이면 null. */
+  appliedTheme: string | null;
+  /** 백엔드가 공급자에게 실제로 보낸 검색어. 정규화 사실을 알릴 때 쓴다. */
+  appliedQuery: string | null;
+  /** 결과가 없을 때 제안하는 가까운 지원 테마. 억지 후보를 만들지 않는다. */
+  suggestedThemes: string[];
+}
+
 export interface PlaceListResponse {
   places: Place[];
+  /** 조회 범위 전체의 개수. `places`는 그중 첫 쪽이다. 모르면 null. */
+  totalCount: number | null;
+  /** 검색으로 온 목록이면 그 성격. 아니면 null. */
+  search: PlaceListSearch | null;
+  /**
+   * 요청한 정렬이 실제로 적용됐는지. 거짓이면 화면이 그 사실을 밝힌다 —
+   * 정렬 토글은 눌린 채로 두고 목록만 공급자 순서로 두면 거짓말이 된다.
+   */
+  sortApplied: boolean;
   /** 목록 전체의 데이터 상태 — 부분 결측은 각 필드의 status가 말한다. */
   status: DataStatus;
   source: string | null;
@@ -151,10 +176,43 @@ export type RelatedKind =
   /** 같은 여행에서 함께 갈 음식점·숙박시설. 대체지가 아니다. */
   | "COMPANION";
 
-export interface RelatedPlace extends Place {
+/**
+ * 연관 장소 한 곳.
+ *
+ * `Place`를 물려받지 않는다 — 공급자 연관 목록에는 **표준 관광지 식별자가 없다.**
+ * 식별자가 없으니 상세로 이어지는 링크도 만들 수 없고, 지어낸 식별자로 링크를
+ * 만들면 눌렀을 때 없는 장소로 간다. 이름과 종류까지만 말한다.
+ */
+export interface RelatedPlace {
+  name: string;
   kind: RelatedKind;
   /** 음식점·숙박 등 세부 분류. 화면이 종류를 정확히 부를 수 있게 한다. */
   subtype: string | null;
+  /** 어느 시·군의 장소인지. */
+  regionName: string | null;
+  /** 연관 순위 — 원래 장소와 얼마나 함께 언급되는지. 혼잡도가 아니다. */
+  rank: number | null;
+  /** 대체지 후보만 예측을 가진다 — 그것이 추천 자격이기 때문이다. */
+  forecast: PlaceForecastSummary;
+}
+
+/**
+ * 빈 목록의 이유. **두 이유를 같은 문구로 표시하지 않는다.**
+ * 확인해 봤지만 자격을 통과한 곳이 없는 것과, 애초에 데이터를 못 얻은 것은 다르다.
+ */
+export type RelatedStatus =
+  /** 자격을 통과한 장소가 담겼다. */
+  | "AVAILABLE"
+  /** 공급자 연관 데이터를 얻지 못했거나 이 관광지가 연관 목록에 없다. */
+  | "NO_RELATED_DATA"
+  /** 연관 장소는 받았지만 추천 자격을 통과한 곳이 없다. */
+  | "NONE_QUALIFIED";
+
+export interface RelatedPlacesGroup {
+  status: RelatedStatus;
+  places: RelatedPlace[];
+  source: string | null;
+  observedAt: string | null;
 }
 
 /**
@@ -166,8 +224,8 @@ export interface PlaceDetail extends Omit<Place, "forecast"> {
   forecast: CrowdForecast;
   currentAccess: CurrentAccess;
   /** 추천 자격을 통과한 관광지만 들어온다. 큐레이션이 이 경계를 우회하지 못한다. */
-  alternatives: RelatedPlace[];
-  companions: RelatedPlace[];
+  alternatives: RelatedPlacesGroup;
+  companions: RelatedPlacesGroup;
   status: DataStatus;
   source: string | null;
   observedAt: string | null;

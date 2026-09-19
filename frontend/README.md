@@ -92,7 +92,7 @@ Built with ❤️ using React Router.
 
 | 이름 | 설명 |
 |---|---|
-| `API_BASE_URL` | 한사나다 백엔드 주소. 서버 로더에서만 읽는다 |
-| `PLACES_SAVED_CONTRACT` | `true`면 백엔드 없이 저장된 계약 응답으로 탐색 홈을 그린다 (화면에 그 사실을 밝힌다) |
+| `API_BASE_URL` | 한사나다 백엔드(`/api/v1/**`) 주소. 서버 로더에서만 읽는다 |
+| `KAKAO_MAP_APP_KEY` | 카카오맵 JavaScript 키. 비우면 지도 없이 목록만으로 탐색한다 |
 
 외부 관광 API 키는 프론트엔드에 두지 않는다. 브라우저는 한사나다 백엔드만 호출한다.

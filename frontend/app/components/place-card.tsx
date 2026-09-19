@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 
-import type { Place } from "../lib/contract";
+import type { Place, RelatedPlace } from "../lib/contract";
 import type { DateMode } from "../lib/explore-params";
 import { formatSourceCaption } from "../lib/format";
 import { FactBadge, NoDataBadge } from "./badges";
@@ -102,5 +102,46 @@ export function PlaceCardSkeleton() {
       <div className="mt-2 h-[27.5px] w-24 rounded-sm bg-grey-100" />
       <div className="mt-2 h-[19.5px] w-3/4 rounded-sm bg-grey-100" />
     </div>
+  );
+}
+
+/**
+ * 연관 장소 카드 — 대체지 후보와 함께 가기 좋은 곳이 함께 쓴다.
+ *
+ * **링크가 아니다.** 공급자 연관 목록에는 표준 관광지 식별자가 없어 상세로 갈 수
+ * 없다. 눌리지 않는 카드를 누를 수 있어 보이게 만들지 않는다.
+ *
+ * 두 종류가 같은 모양을 쓰는 이유는 우열이 아니라 종류가 다르기 때문이다 —
+ * 구분은 섹션 제목과 문구가 한다.
+ */
+export function RelatedPlaceCard({ place }: { place: RelatedPlace }) {
+  const forecast = place.forecast;
+
+  return (
+    <article className="h-full rounded-xl bg-surface p-4">
+      <h3 className="type-title-md line-clamp-2 text-grey-900">{place.name}</h3>
+
+      <p className="type-body-md mt-2 truncate text-grey-600">
+        {[place.regionName, place.subtype].filter(Boolean).join(" · ") || "분류 정보 없음"}
+      </p>
+
+      {/* 대체지 후보는 예측을 가진 곳만 들어온다 — 그 예측이 카드의 근거다. */}
+      {forecast.quietDate ? (
+        <div className="mt-2">
+          <QuietDateValue date={forecast.quietDate} />
+          <p className="type-caption text-grey-600">이 장소에서 한산할 것으로 보이는 날이에요</p>
+        </div>
+      ) : place.kind === "ALTERNATIVE" ? (
+        <div className="mt-2">
+          <NoForecastBadge />
+        </div>
+      ) : null}
+
+      {forecast.source ? (
+        <p className="type-caption mt-2 text-grey-600">
+          {formatSourceCaption(forecast.source, forecast.observedAt)}
+        </p>
+      ) : null}
+    </article>
   );
 }

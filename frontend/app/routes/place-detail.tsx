@@ -1,10 +1,10 @@
 import { Link, useSearchParams } from "react-router";
 
 import type { Route } from "./+types/place-detail";
-import type { RelatedPlace } from "../lib/contract";
+import type { RelatedPlacesGroup } from "../lib/contract";
 import { BottomNav } from "../components/bottom-nav";
 import { ForecastGrid } from "../components/forecast-grid";
-import { PlaceCard } from "../components/place-card";
+import { RelatedPlaceCard } from "../components/place-card";
 import { useCollection } from "../lib/use-collection";
 import { CurrentAccessSection } from "../components/road-status";
 import { EmptyState, ErrorState } from "../components/states";
@@ -99,16 +99,18 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
 
       <RelatedSection
         title="대신 가볼 만한 곳"
-        description="이 장소 대신 갈 만한 관광지예요."
-        places={detail.alternatives}
-        emptyMessage="지금은 확인된 대체지 후보가 없어요."
+        description="이 장소 대신 갈 만한 관광지예요. 한산할 것으로 보이는 날을 확인한 곳만 담았어요."
+        group={detail.alternatives}
+        noDataMessage="이 관광지의 연관 장소 정보를 얻지 못했어요."
+        noneQualifiedMessage="연관 장소는 확인했지만, 예측을 가진 대체지 후보가 없었어요."
       />
 
       <RelatedSection
         title="함께 가기 좋은 곳"
         description="같은 여행에서 함께 들르기 좋은 음식점·숙박시설이에요. 대체지가 아니에요."
-        places={detail.companions}
-        emptyMessage="지금은 확인된 함께 갈 곳이 없어요."
+        group={detail.companions}
+        noDataMessage="이 관광지의 연관 장소 정보를 얻지 못했어요."
+        noneQualifiedMessage="연관 장소 중 음식점·숙박시설은 없었어요."
       />
       </main>
 
@@ -163,34 +165,49 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * 형태로 나누면 둘 중 하나가 열등해 보인다 — 이 둘은 우열이 아니라 종류가 다르다.
  * 구분은 섹션과 문구가 한다.
  */
+/**
+ * 대체지 후보와 함께 가기 좋은 곳은 **같은 카드 모양**을 쓴다.
+ * 형태로 나누면 둘 중 하나가 열등해 보인다 — 이 둘은 우열이 아니라 종류가 다르다.
+ * 구분은 섹션과 문구가 한다.
+ *
+ * 비어 있을 때의 문구는 두 가지다. `확인해 봤지만 자격을 통과한 곳이 없었다`와
+ * `정보를 얻지 못했다`를 같은 말로 덮으면, 확인해 봤다는 사실까지 사라진다.
+ */
 function RelatedSection({
   title,
   description,
-  places,
-  emptyMessage,
+  group,
+  noDataMessage,
+  noneQualifiedMessage,
 }: {
   title: string;
   description: string;
-  places: RelatedPlace[];
-  emptyMessage: string;
+  group: RelatedPlacesGroup;
+  noDataMessage: string;
+  noneQualifiedMessage: string;
 }) {
   return (
     <Section title={title}>
       <p className="type-body-md -mt-2 mb-4 text-grey-600">{description}</p>
-      {places.length === 0 ? (
+
+      {group.places.length === 0 ? (
         // 빈 추천을 감추지 않는다 — 섹션을 지우면 확인해 봤다는 사실까지 사라진다.
-        <EmptyState message={emptyMessage} />
+        <EmptyState
+          message={group.status === "NO_RELATED_DATA" ? noDataMessage : noneQualifiedMessage}
+        />
       ) : (
-        <ul className="flex gap-6 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible">
-          {places.map((place) => (
-            <li key={place.placeId} className="w-[260px] shrink-0 sm:w-auto">
-              <PlaceCard place={place} />
-              {place.subtype ? (
-                <p className="type-caption mt-1 text-grey-600">{place.subtype}</p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex gap-6 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible">
+            {group.places.map((place) => (
+              <li key={`${place.name}-${place.rank ?? 0}`} className="w-[260px] shrink-0 sm:w-auto">
+                <RelatedPlaceCard place={place} />
+              </li>
+            ))}
+          </ul>
+          <p className="type-caption mt-4 text-grey-600">
+            {formatSourceCaption(group.source, group.observedAt)}
+          </p>
+        </>
       )}
     </Section>
   );

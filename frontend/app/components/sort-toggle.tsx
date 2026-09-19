@@ -63,14 +63,24 @@ function SortOption({
 export function InterestSourceNote({
   source,
   observedAt,
+  /** 요청한 정렬이 적용되지 않았으면 그 사실을 먼저 말한다 — 토글만 눌린 채로 두지 않는다. */
+  sortApplied = true,
 }: {
   source: string | null;
   observedAt: string | null;
+  sortApplied?: boolean;
 }) {
   return (
-    <p className="type-caption mt-2 text-grey-600">
-      {[source ?? "출처 없음", observedAt ?? "기준 시점 없음"].join(" · ")} · 실제 방문객 수가
-      아니라 내비게이션 목적지 집계예요
-    </p>
+    <>
+      {!sortApplied ? (
+        <p className="type-caption mt-2 text-grey-700">
+          지금은 관심도를 얻지 못해 정렬이 적용되지 않았어요 — 공급자가 준 순서 그대로예요
+        </p>
+      ) : null}
+      <p className="type-caption mt-2 text-grey-600">
+        {[source ?? "출처 없음", observedAt ?? "기준 시점 없음"].join(" · ")} · 실제 방문객 수가
+        아니라 온라인에서 얼마나 언급됐는지예요
+      </p>
+    </>
   );
 }

@@ -27,7 +27,7 @@ import {
   type OpenSheet,
   type SheetSnap,
 } from "../lib/explore-params";
-import { fetchPlaceList, usesSavedContractResponse } from "../lib/places.server";
+import { fetchPlaceList } from "../lib/places.server";
 import { formatObservedAt } from "../lib/format";
 
 export function meta({}: Route.MetaArgs) {
@@ -52,20 +52,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!result.ok) {
     // 원인은 서버 로그에만 남긴다 — 클라이언트로 내려보내지 않는다.
     console.error(`[places] ${result.failure.dataName} 조회 실패: ${result.failure.cause}`);
-    return {
-      data: null,
-      savedContract: false,
-      kakaoAppKey,
-      error: { dataName: result.failure.dataName },
-    };
+    return { data: null, kakaoAppKey, error: { dataName: result.failure.dataName } };
   }
 
-  return {
-    data: result.data,
-    savedContract: usesSavedContractResponse(),
-    kakaoAppKey,
-    error: null,
-  };
+  return { data: result.data, kakaoAppKey, error: null };
 }
 
 /** 시트를 끌어올린 것만으로 목록을 다시 부르지 않는다 — 스냅은 화면 상태지 조회 조건이 아니다. */
@@ -85,7 +75,7 @@ export function shouldRevalidate({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { data, savedContract, kakaoAppKey, error } = loaderData;
+  const { data, kakaoAppKey, error } = loaderData;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -167,7 +157,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <MapLegend status={mapStatus} periodLabel={null} source={null} />
           )
         }
-        header={<SheetHeader state={state} data={data} savedContract={savedContract} />}
+        header={<SheetHeader state={state} data={data} />}
       >
         {loading ? (
           <PlaceList>
@@ -263,30 +253,61 @@ function TopBar({
 function SheetHeader({
   state,
   data,
-  savedContract,
 }: {
   state: ExploreState;
   data: Route.ComponentProps["loaderData"]["data"];
-  savedContract: boolean;
 }) {
+  // 조회 범위의 전체 개수와 지금 화면에 온 개수는 다르다. 첫 쪽만 받아 놓고
+  // 전체 개수를 `이만큼 보여준다`로 읽히게 두지 않는다.
+  const shown = data?.places.length ?? 0;
+  const total = data?.totalCount ?? null;
+
   return (
     <div className="pt-2 lg:px-6 lg:pt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="type-headline-md text-grey-800">
-          {data ? `이 지도 범위 ${data.places.length}곳` : "이 지도 범위"}
+          {data ? `이 지도 범위 ${total ?? shown}곳` : "이 지도 범위"}
         </h2>
         <SortToggle state={state} />
       </div>
+
+      {total !== null && total > shown ? (
+        <p className="type-caption mt-2 text-grey-600">그중 {shown}곳을 먼저 보여드려요</p>
+      ) : null}
 
       {/* 관심도 캡션은 시트 헤더에 산다. 지도 범례와 같은 시각 블록에 두지 않는다 (U15). */}
       <InterestSourceNote
         source={data?.source ?? null}
         observedAt={formatObservedAt(data?.observedAt ?? null)}
+        // 검색 결과는 애초에 정렬을 요청하지 않는다 — 그 자리에 실패 문구를 띄우지 않는다.
+        sortApplied={data === null || data.search !== null || data.sortApplied}
       />
 
-      {savedContract ? (
-        <p className="type-body-md mt-2 rounded-lg bg-grey-100 p-3 text-grey-700">
-          지금 보이는 목록은 실제 조회 결과가 아니라 화면 확인용으로 저장해 둔 계약 응답이에요.
+      {/*
+        지원 테마 결과와 일반 검색 결과는 신뢰 수준이 다르다 (ADR-0003).
+        같은 목록 모양으로 오기 때문에, 어느 쪽인지 문장으로 반드시 밝힌다.
+      */}
+      {data?.search ? <SearchNotice search={data.search} /> : null}
+    </div>
+  );
+}
+
+function SearchNotice({ search }: { search: NonNullable<Route.ComponentProps["loaderData"]["data"]>["search"] }) {
+  if (!search) return null;
+
+  return (
+    <div className="type-body-md mt-2 rounded-lg bg-grey-100 p-3 text-grey-700">
+      {search.resultType === "SUPPORTED_THEME" ? (
+        <p>
+          {search.appliedTheme ? `${search.appliedTheme} ` : ""}테마에 맞는 곳만 골라 보여드려요.
+        </p>
+      ) : (
+        <p>검색어와 관련된 결과예요. 테마에 맞는지는 확인하지 못했어요.</p>
+      )}
+
+      {search.suggestedThemes.length > 0 ? (
+        <p className="type-caption mt-2 text-grey-600">
+          이런 테마는 어떠세요 — {search.suggestedThemes.join(" · ")}
         </p>
       ) : null}
     </div>
