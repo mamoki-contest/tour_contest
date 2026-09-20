@@ -36,6 +36,30 @@ export function formatSourceCaption(source: string | null, observedAt: string | 
 }
 
 /**
+ * 좁은 자리의 기준 시점 — `3월 19일 기준`.
+ *
+ * 카드 캡션에서 공급자 이름을 걷어낸 자리(#35)에 남는 한 줄이다. 올해 안의 날짜면
+ * 연도를 떨어뜨리고, **해가 다르면 연도를 남긴다** — 작년 9월을 `9월 기준`으로 적으면
+ * 올해 값으로 읽힌다. 기준 시점을 줄이는 것과 틀리게 적는 것은 다른 일이다.
+ */
+export function formatObservedAtShort(observedAt: string | null, now: Date = new Date()): string {
+  if (!observedAt) return "기준 시점 없음";
+  const parsed = new Date(observedAt);
+  if (Number.isNaN(parsed.getTime())) return "기준 시점 없음";
+
+  const year = (date: Date) =>
+    new Intl.DateTimeFormat("ko-KR", { year: "numeric", timeZone: "Asia/Seoul" }).format(date);
+
+  const formatter = new Intl.DateTimeFormat("ko-KR", {
+    ...(year(parsed) === year(now) ? {} : { year: "numeric" }),
+    month: "long",
+    day: "numeric",
+    timeZone: "Asia/Seoul",
+  });
+  return `${formatter.format(parsed)} 기준`;
+}
+
+/**
  * 방문 규모의 기준 기간을 캡션 한 줄로 옮긴다.
  *
  * 공급자가 최근 데이터를 바로 공개하지 않아 이 기간은 오늘과 한 달 가까이 떨어져

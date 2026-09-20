@@ -57,16 +57,19 @@ function SortOption({
 /**
  * 정렬 토글 바로 아래 상시 캡션 (U3) — 접지 않는다.
  *
- * 정렬이 무엇을 센 값인지 모른 채 방향을 뒤집으면 `온라인 언급 적은 순`을 `한산한 순`
- * 으로 읽는다. 그 오해를 막는 것이 이 캡션의 일이다.
+ * 남기는 것은 **기준 시점 한 줄**이다. 공급자 이름과 해명 문장은 걷어냈다 (#35) —
+ * 오해를 막는 일은 반복되는 문장이 아니라 라벨 자체(`온라인 언급 많은 순`)가 한다.
  */
 export function MentionSortNote({
-  source,
   observedAt,
   /** 요청한 정렬이 적용되지 않았으면 그 사실을 먼저 말한다 — 토글만 눌린 채로 두지 않는다. */
   sortApplied = true,
 }: {
-  source: string | null;
+  /**
+   * 공급자 이름. **화면에 쓰지 않는다** — `home.tsx` 가 아직 넘기고 있어 받기만 한다.
+   * 그 호출부가 정리되면 이 프로퍼티도 사라진다.
+   */
+  source?: string | null;
   /** 이미 문구로 다듬어진 기준 시점. 예: `2026년 9월 19일 기준`. */
   observedAt: string | null;
   sortApplied?: boolean;
@@ -78,10 +81,7 @@ export function MentionSortNote({
           지금은 온라인 언급 정보가 없어 순서를 매기지 않았어요
         </p>
       ) : null}
-      <p className="type-caption mt-2 text-grey-600">
-        {[source ?? "출처 없음", observedAt ?? "기준 시점 없음"].join(" · ")} · 실제 방문객 수가
-        아니라 온라인에서 얼마나 언급됐는지예요
-      </p>
+      <p className="type-caption mt-2 text-grey-600">{observedAt ?? "기준 시점 없음"}</p>
     </>
   );
 }

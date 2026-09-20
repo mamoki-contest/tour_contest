@@ -2,7 +2,7 @@ import { Link } from "react-router";
 
 import type { Place, RelatedPlace } from "../lib/contract";
 import type { DateMode } from "../lib/explore-params";
-import { formatSourceCaption } from "../lib/format";
+import { formatObservedAtShort, formatSourceCaption } from "../lib/format";
 import { placeSignals } from "../lib/place-signals";
 import { FactBadge, NoDataBadge } from "./badges";
 import { CrowdBadge, NoForecastBadge, QuietDateValue } from "./crowd-badge";
@@ -108,9 +108,8 @@ export function PlaceCard({
         ))}
       </ul>
 
-      <p className="type-caption mt-2 text-grey-600">
-        {formatSourceCaption(rank.source, rank.observedAt)}
-      </p>
+      {/* 카드 캡션은 기준 시점 한 줄이다 — 공급자 이름은 화면에 적지 않는다 (#35). */}
+      <p className="type-caption mt-2 text-grey-600">{formatObservedAtShort(rank.observedAt)}</p>
     </article>
   );
 }
