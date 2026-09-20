@@ -2,6 +2,10 @@ import type {
   CrowdForecast,
   CurrentAccess,
   ForecastDay,
+  ParkingAvailability,
+  ParkingCongestion,
+  ParkingLot,
+  ParkingStatus,
   PlaceDetail,
   PlaceDetailResult,
   RelatedKind,
@@ -54,6 +58,28 @@ interface BackendRelatedPlacesView {
   source?: string | null;
 }
 
+interface BackendParkingLot {
+  name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  distanceMeters?: number | null;
+  totalLots?: number | null;
+  /** 점유 대수. 잔여면은 백엔드가 이미 빼서 `availableLots` 로 준다 — 여기서 다시 계산하지 않는다. */
+  occupiedLots?: number | null;
+  availableLots?: number | null;
+  congestion?: string | null;
+  observedAt?: string | null;
+  source?: string | null;
+}
+
+interface BackendParking {
+  status?: string | null;
+  dataStatus?: BackendDataStatus | null;
+  lots?: (BackendParkingLot | null)[] | null;
+  observedAt?: string | null;
+  source?: string | null;
+}
+
 interface BackendDetail {
   contentId?: string | null;
   name?: string | null;
@@ -76,7 +102,7 @@ interface BackendDetail {
       roads?: ({ roadName?: string | null; averageSpeed?: number | null } | null)[] | null;
       observedAt?: string | null;
     } | null;
-    parking?: { status?: BackendDataStatus | null } | null;
+    parking?: BackendParking | null;
     checkedAt?: string | null;
     source?: string | null;
   } | null;
@@ -122,6 +148,75 @@ function toFlow(speedKph: number): RoadFlow {
   return "JAM";
 }
 
+/**
+ * 아는 이름만 통과시킨다. 모르는 값을 기본 등급으로 떨어뜨리면 공급자가 넓힌
+ * 어휘가 조용히 `여유`나 `만차`로 둔갑한다.
+ */
+const PARKING_CONGESTIONS: Record<string, ParkingCongestion> = {
+  PLENTY: "PLENTY",
+  MODERATE: "MODERATE",
+  CROWDED: "CROWDED",
+  FULL: "FULL",
+};
+
+const PARKING_AVAILABILITIES: Record<string, ParkingAvailability> = {
+  AVAILABLE: "AVAILABLE",
+  STATIC_ONLY: "STATIC_ONLY",
+  NONE: "NONE",
+  NO_DATA: "NO_DATA",
+};
+
+/**
+ * 주차 여건.
+ *
+ * 두 공급자가 겹쳐 오기 때문에 **묶음의 상태와 각 주차장의 실시간 여부가 따로 논다.**
+ * `AVAILABLE` 은 `반경 안에 실시간을 아는 곳이 하나라도 있다`는 뜻이지 목록이 전부
+ * 실시간이라는 뜻이 아니다 — 실측에서 경포해수욕장은 여덟 곳 중 한 곳만 실시간이었다.
+ * 그래서 잔여면은 묶음이 아니라 **주차장 한 곳씩** 판단한다.
+ *
+ * 모르는 상태 이름은 `NO_DATA` 로 받는다. `NONE`(확인했고 없다)으로 떨어뜨리면
+ * 확인하지 못한 곳을 주차장이 없는 곳이라고 말하게 된다.
+ */
+export function toParking(raw: BackendParking | null | undefined): ParkingStatus {
+  const lots: ParkingLot[] = Array.isArray(raw?.lots)
+    ? raw.lots
+        .map((entry): ParkingLot | null => {
+          const name = text(entry?.name);
+          // 이름 없는 주차장은 화면에서 가리킬 수가 없다.
+          if (!name) return null;
+
+          const latitude = num(entry?.latitude);
+          const longitude = num(entry?.longitude);
+          const availableLots = num(entry?.availableLots);
+
+          return {
+            name,
+            coordinates:
+              latitude !== null && longitude !== null ? { latitude, longitude } : null,
+            distanceMeters: num(entry?.distanceMeters),
+            totalLots: num(entry?.totalLots),
+            availableLots,
+            // 잔여면을 모르는 곳에 등급만 남기지 않는다 — 근거 없는 등급이 된다.
+            congestion:
+              availableLots === null
+                ? null
+                : (PARKING_CONGESTIONS[text(entry?.congestion) ?? ""] ?? null),
+            observedAt: text(entry?.observedAt),
+            source: text(entry?.source),
+          };
+        })
+        .filter((lot): lot is ParkingLot => lot !== null)
+    : [];
+
+  return {
+    availability: PARKING_AVAILABILITIES[text(raw?.status) ?? ""] ?? "NO_DATA",
+    lots,
+    status: raw ? toDataStatus(raw.dataStatus) : "MISSING",
+    source: text(raw?.source),
+    observedAt: text(raw?.observedAt),
+  };
+}
+
 function toCurrentAccess(detail: BackendDetail): CurrentAccess {
   const access = detail.currentAccess;
   const road = access?.road;
@@ -140,8 +235,7 @@ function toCurrentAccess(detail: BackendDetail): CurrentAccess {
 
   return {
     roads,
-    // 공급자가 주차 면수를 주지 않는다. 상태만 있는 값으로 잔여면을 지어내지 않는다.
-    parking: null,
+    parking: toParking(access?.parking),
     status: roads.length === 0 ? "MISSING" : toDataStatus(road?.status),
     source: text(access?.source),
     // 도로 관측 시각이 있으면 그쪽이 맞다 — 우리가 조회한 시각이 아니라 도로의 시각이다.
@@ -241,6 +335,17 @@ function toDetail(raw: unknown): PlaceDetail | null {
   };
 }
 
+/**
+ * 없는 관광지인지, 부르지 못한 것인지.
+ *
+ * 백엔드는 없는 식별자에만 404(`404-1`)를 준다. 시간 초과·연결 실패는 응답을 받기
+ * 전이라 상태 자체가 없고, 500 대는 다시 부르면 달라질 수 있다 — **재시도가
+ * 무의미한 경우만** 참이다.
+ */
+export function isNotFound(status: number | undefined): boolean {
+  return status === 404;
+}
+
 export async function fetchPlaceDetail(
   placeId: string,
   signal?: AbortSignal,
@@ -252,10 +357,20 @@ export async function fetchPlaceDetail(
     signal,
   );
 
-  if (!result.ok) return { ok: false, failure: result.failure };
+  if (!result.ok) {
+    return { ok: false, failure: { ...result.failure, notFound: isNotFound(result.failure.status) } };
+  }
 
   const detail = toDetail(result.data);
   return detail
     ? { ok: true, data: detail }
-    : { ok: false, failure: { dataName: DETAIL_DATA_NAME, cause: "응답이 계약을 벗어났습니다." } };
+    : {
+        ok: false,
+        failure: {
+          dataName: DETAIL_DATA_NAME,
+          cause: "응답이 계약을 벗어났습니다.",
+          // 계약을 벗어난 응답은 없는 곳이 아니라 고장이다. 다시 불러 볼 값이 있다.
+          notFound: false,
+        },
+      };
 }

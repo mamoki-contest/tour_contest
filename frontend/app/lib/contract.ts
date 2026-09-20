@@ -147,11 +147,64 @@ export interface RoadStatus {
   label: string;
 }
 
+/**
+ * 주차장 한 곳의 혼잡 등급. **잔여 비율(잔여면 ÷ 총 주차면)이다.**
+ *
+ * 방문 혼잡도 예측과 달리 여기서는 등급을 만들어도 된다 — 분모가 그 주차장 자신의
+ * 총 주차면이라 뜻이 분명하고 공급자 기준을 추측할 필요가 없다. 그래도 이것은
+ * **자리 수지 사람 수가 아니다.**
+ */
+export type ParkingCongestion = "PLENTY" | "MODERATE" | "CROWDED" | "FULL";
+
+/**
+ * 주차장이 있는지·실시간을 아는지를 말하는 축. `DataStatus` 와 **다른 축이다** —
+ * 저쪽은 공급자 응답이 방금 받은 것인지를 말한다.
+ *
+ * `NONE` 과 `NO_DATA` 를 같은 문구로 표시하지 않는다. `물어봤는데 없더라` 와
+ * `물어보지도 못했다` 는 다른 말이다.
+ */
+export type ParkingAvailability =
+  /** 반경 안에 실시간 잔여면을 아는 주차장이 있다. */
+  | "AVAILABLE"
+  /** 주차장은 있으나 지금 자리가 있는지는 모른다 — 이름·총 주차면·거리까지. */
+  | "STATIC_ONLY"
+  /** 두 공급자를 확인했고 반경 안에 주차장이 없다. */
+  | "NONE"
+  /** 좌표가 없거나 공급자를 확인하지 못해 있다 없다를 말할 수 없다. */
+  | "NO_DATA";
+
+/**
+ * 주차장 한 곳.
+ *
+ * 실시간을 아는 곳과 규모만 아는 곳이 **같은 목록에 섞여** 온다. 묶음의 상태가
+ * `AVAILABLE` 이어도 목록의 모든 곳이 실시간인 것은 아니다 — 잔여면을 지어내지
+ * 않으려면 각 곳의 `availableLots` 를 봐야 한다.
+ */
+export interface ParkingLot {
+  name: string;
+  coordinates: Coordinates | null;
+  /** 관광지로부터의 거리(m). 반경 1km 안이다. */
+  distanceMeters: number | null;
+  /** 총 주차면. 정적 정보라 실시간 잔여면이 없어도 있을 수 있다. */
+  totalLots: number | null;
+  /** 실시간 잔여면. **null 이면 그 주차장은 규모만 아는 곳이다.** */
+  availableLots: number | null;
+  /** 잔여 비율 등급. 실시간이 없으면 null — 낮은 등급으로 대체하지 않는다. */
+  congestion: ParkingCongestion | null;
+  /** 실시간 값을 관측한 시각. 정적 정보뿐이면 null. */
+  observedAt: string | null;
+  /** 이 한 곳이 어느 공급자에서 왔는지. 묶음 전체의 출처와 다를 수 있다. */
+  source: string | null;
+}
+
 export interface ParkingStatus {
-  /** 총 주차면. */
-  total: number | null;
-  /** 잔여 주차면. 실시간 정보가 없으면 null. */
-  available: number | null;
+  availability: ParkingAvailability;
+  /** 최대 8곳. 실시간을 아는 곳이 앞에 온다. */
+  lots: ParkingLot[];
+  status: DataStatus;
+  source: string | null;
+  /** 실시간 관측 시각. 규모 정보뿐이면 null이라 `조회 시각`을 붙일 수 없다. */
+  observedAt: string | null;
 }
 
 /**
@@ -160,7 +213,8 @@ export interface ParkingStatus {
  */
 export interface CurrentAccess {
   roads: RoadStatus[];
-  parking: ParkingStatus | null;
+  /** 항상 있다 — 주차를 확인하지 못한 것도 `availability` 가 말하는 한 상태다. */
+  parking: ParkingStatus;
   status: DataStatus;
   source: string | null;
   /** 조회 시각 (ISO-8601). 도로·주차는 이 시각의 상태다. */
@@ -231,9 +285,21 @@ export interface PlaceDetail extends Omit<Place, "forecast"> {
   observedAt: string | null;
 }
 
+/**
+ * 상세 조회 실패.
+ *
+ * 목록과 달리 **없는 곳과 부르지 못한 곳을 가른다.** 없는 곳에 `다시 시도` 를 주면
+ * 몇 번을 눌러도 같은 자리고, 부르지 못한 곳을 없는 곳처럼 말하면 돌아올 값을
+ * 사라졌다고 하는 셈이다.
+ */
+export interface PlaceDetailFailure extends PlaceListFailure {
+  /** 공급자에 그 식별자가 없다. 재시도로 달라지지 않는다. */
+  notFound: boolean;
+}
+
 export type PlaceDetailResult =
   | { ok: true; data: PlaceDetail }
-  | { ok: false; failure: PlaceListFailure };
+  | { ok: false; failure: PlaceDetailFailure };
 
 /* ─────────────────────────  검색 (슬라이스 #5)  ───────────────────────── */
 
