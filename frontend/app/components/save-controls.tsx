@@ -4,9 +4,11 @@ import { OverlaySheet, PrimaryButton } from "./overlay-sheet";
 import { SecondaryButton } from "./states";
 import type { SavedPlace } from "../lib/personal-collection";
 import {
-  FORECAST_WINDOW_DAYS,
-  forecastWindow,
-  isWithinForecastWindow,
+  isWithinWindow,
+  resolveWindow,
+  windowDates,
+  windowLabel,
+  type SupportedWindow,
 } from "../lib/forecast-window";
 
 /**
@@ -45,29 +47,34 @@ export function SaveButton({
 /**
  * 저장 편집 시트 — 태그·메모·방문 예정일.
  *
- * 저장 삭제는 **한 단계 확인**을 거친다 (H5 에러 예방). 방문 예정일은 예측이 있는
- * 30일 창 안에서만 고를 수 있다 — 창 밖 날짜를 넣어두면 나중에 뜻을 잃는다.
+ * 저장 삭제는 **한 단계 확인**을 거친다 (H5 에러 예방). 방문 예정일은 예측이 닿는 창
+ * 안에서만 고를 수 있다 — 창 밖 날짜를 넣어두면 나중에 뜻을 잃는다. 창의 끝은 응답이
+ * 말한 날이다 (#30 M3).
  */
 export function SaveEditSheet({
   place,
+  supported,
   onClose,
   onSave,
   onRemove,
 }: {
   place: SavedPlace;
+  /** 응답이 말하는 예측 지원 창. 모르면 null이고, 그때만 오늘 + 30일로 되돌아간다. */
+  supported?: SupportedWindow | null;
   onClose: () => void;
   onSave: (patch: { tags: string[]; memo: string; plannedDate: string | null }) => void;
   onRemove: () => void;
 }) {
+  const window = resolveWindow(supported);
   const [tags, setTags] = useState<string[]>(place.tags);
   const [tagDraft, setTagDraft] = useState("");
   const [memo, setMemo] = useState(place.memo);
   const [plannedDate, setPlannedDate] = useState<string | null>(
-    place.plannedDate && isWithinForecastWindow(place.plannedDate) ? place.plannedDate : null,
+    place.plannedDate && isWithinWindow(place.plannedDate, window) ? place.plannedDate : null,
   );
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
-  const days = forecastWindow();
+  const days = windowDates(window);
 
   const addTag = () => {
     const next = tagDraft.trim();
@@ -138,9 +145,7 @@ export function SaveEditSheet({
 
       <section className="mt-6">
         <h3 className="type-title-md text-grey-800">방문 예정일</h3>
-        <p className="type-caption mt-1 text-grey-600">
-          예측이 있는 {FORECAST_WINDOW_DAYS}일 안에서 고를 수 있어요.
-        </p>
+        <p className="type-caption mt-1 text-grey-600">{windowLabel(window)} 중에서 고를 수 있어요</p>
         <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"

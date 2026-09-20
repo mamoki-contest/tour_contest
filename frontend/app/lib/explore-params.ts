@@ -24,7 +24,7 @@ export type SheetSnap = "peek" | "middle" | "full";
  * 안 골랐다`를 표현할 수 없다. 그래서 열림 상태만 따로 `sheet`에 둔다 — 요구사항의
  * 핵심(히스토리 엔트리를 가져 뒤로가기가 한 겹씩 닫는다)은 그대로다.
  */
-export type OpenSheet = "region" | "search" | "date";
+export type OpenSheet = "region" | "search" | "date" | "help";
 
 /** 지도 경계 — 목록 조회의 탐색 범위. 사용자가 `이 지도 영역에서 검색`을 눌러야 확정된다. */
 export interface MapBounds {
@@ -65,6 +65,13 @@ export interface ExploreState {
   /** 고정 모드의 선택일 (YYYY-MM-DD). 유연 모드에서는 항상 null. */
   date: string | null;
   sort: SortOrder;
+  /**
+   * 지금까지 불러온 쪽 수 (#30 M4).
+   *
+   * 한 쪽이 아니라 **누적**이다 — `더 보기`는 21번째부터 따로 보여주는 것이 아니라
+   * 읽던 목록을 늘리는 동작이고, 그래야 뒤로가기가 읽던 자리로 돌아온다.
+   */
+  page: number;
   snap: SheetSnap;
   /** 열려 있는 오버레이 시트. null이면 닫힘. */
   sheet: OpenSheet | null;
@@ -80,13 +87,24 @@ export const DEFAULT_EXPLORE_STATE: ExploreState = {
   dateMode: "FLEXIBLE",
   date: null,
   sort: "INTEREST_DESC",
+  page: 1,
   snap: "middle",
   sheet: null,
 };
 
 const SORTS: SortOrder[] = ["INTEREST_DESC", "INTEREST_ASC"];
 const SNAPS: SheetSnap[] = ["peek", "middle", "full"];
-const SHEETS: OpenSheet[] = ["region", "search", "date"];
+const SHEETS: OpenSheet[] = ["region", "search", "date", "help"];
+
+/** 누적해 부를 수 있는 쪽 수의 끝. 백엔드 한 번 조회의 최대 개수(100)가 정한다. */
+export const MAX_PAGE = 5;
+
+/** `page=3`. 정수가 아니거나 범위 밖이면 첫 쪽으로 되돌린다 — 주소를 손댄 값이다. */
+function parsePage(raw: string | null): number {
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
+  return Math.min(parsed, MAX_PAGE);
+}
 
 function text(params: URLSearchParams, key: string): string | null {
   const raw = params.get(key);
@@ -165,7 +183,8 @@ export function formatViewportCenter(viewport: MapViewport): string {
  * 없다. 반대 방향(`withRegionCode`)과 대칭이다.
  */
 export function withMapBounds(state: ExploreState, bounds: MapBounds): ExploreState {
-  return { ...state, bounds, regionCode: null };
+  // 범위가 바뀌면 지금까지 늘려 둔 쪽은 다른 목록의 쪽이다 — 첫 쪽으로 되돌린다.
+  return { ...state, bounds, regionCode: null, page: 1 };
 }
 
 /**
@@ -180,6 +199,7 @@ export function withRegionCode(state: ExploreState, regionCode: string | null): 
     ...state,
     regionCode,
     bounds: null,
+    page: 1,
     viewport: regionCode === null ? state.viewport : null,
   };
 }
@@ -210,6 +230,7 @@ export function parseExploreState(params: URLSearchParams, now: Date = new Date(
     dateMode,
     date,
     sort: SORTS.includes(sortRaw as SortOrder) ? (sortRaw as SortOrder) : DEFAULT_EXPLORE_STATE.sort,
+    page: parsePage(params.get("page")),
     snap: SNAPS.includes(snapRaw as SheetSnap) ? (snapRaw as SheetSnap) : DEFAULT_EXPLORE_STATE.snap,
     sheet: SHEETS.includes(sheetRaw as OpenSheet) ? (sheetRaw as OpenSheet) : null,
   };
@@ -229,6 +250,7 @@ export function toSearchParams(state: ExploreState): URLSearchParams {
   if (state.dateMode !== DEFAULT_EXPLORE_STATE.dateMode) params.set("dateMode", state.dateMode);
   if (state.dateMode === "FIXED" && state.date) params.set("date", state.date);
   if (state.sort !== DEFAULT_EXPLORE_STATE.sort) params.set("sort", state.sort);
+  if (state.page > 1) params.set("page", String(state.page));
   if (state.snap !== DEFAULT_EXPLORE_STATE.snap) params.set("snap", state.snap);
   if (state.sheet) params.set("sheet", state.sheet);
   return params;

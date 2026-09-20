@@ -1,11 +1,11 @@
 import type {
   Place,
+  PlaceListFailure,
   PlaceListResponse,
-  PlaceListResult,
   PlaceListSearch,
   SearchResultType,
 } from "./contract";
-import { DEFAULT_EXPLORE_STATE, type ExploreState } from "./explore-params";
+import { DEFAULT_EXPLORE_STATE, MAX_PAGE, type ExploreState } from "./explore-params";
 import {
   fetchEnvelope,
   toDataStatus,
@@ -26,7 +26,45 @@ import {
  */
 
 const PAGE_SIZE = 20;
+/** 백엔드 한 번 조회의 최대 개수. `더 보기`가 닿을 수 있는 끝을 이 값이 정한다. */
+const MAX_SIZE = PAGE_SIZE * MAX_PAGE;
 const LIST_DATA_NAME = "관광지 목록";
+
+/**
+ * 예측이 실제로 닿는 날의 범위.
+ *
+ * 프론트는 오래 `오늘 + 30일`을 스스로 계산했지만 백엔드가 가진 창은 그보다 짧다.
+ * 고를 수 있다고 그려 놓고 조회에서 되돌리는 대신, 응답이 말하는 창을 그대로 쓴다 (#30 M3).
+ */
+export interface SupportedWindow {
+  /** YYYY-MM-DD. */
+  from: string;
+  to: string;
+}
+
+/**
+ * 한 쪽이 아니라 **지금까지 누적해 받은 목록**.
+ *
+ * 화면 계약의 응답에 쪽 정보를 얹는다 — 21번째부터를 따로 보여주는 화면이 아니라
+ * 읽던 목록을 늘리는 화면이라서, 화면은 `몇 쪽인가`가 아니라 `더 있는가`를 묻는다.
+ */
+export interface PlaceListPage extends PlaceListResponse {
+  /** 지금까지 누적한 쪽 수. */
+  page: number;
+  /** 아직 못 받은 항목이 남았고, 한 번 더 부를 수 있는지. */
+  hasMore: boolean;
+  /**
+   * 끝에 닿았는지 — 남은 항목은 있지만 한 번에 받을 수 있는 한계를 넘었다.
+   * 버튼을 조용히 지우는 대신 화면이 조건을 좁히도록 권한다.
+   */
+  reachedLimit: boolean;
+  /** 응답이 말하는 예측 지원 창. 날짜를 보내지 않은 조회에서는 null. */
+  forecastWindow: SupportedWindow | null;
+}
+
+export type PlaceListPageResult =
+  | { ok: true; data: PlaceListPage }
+  | { ok: false; failure: PlaceListFailure };
 
 interface BackendListResponse {
   items?: BackendAttraction[] | null;
@@ -57,11 +95,19 @@ function toBackendSort(sort: ExploreState["sort"]): string {
   return sort === "INTEREST_ASC" ? "ONLINE_MENTION_ASC" : "ONLINE_MENTION_DESC";
 }
 
+/**
+ * 누적해 받을 개수. `더 보기`를 누른 만큼 한 번에 더 크게 받는다 — 쪽을 나눠 따로
+ * 부르면 읽던 앞쪽을 화면이 직접 들고 있어야 하고, 뒤로가기가 그 자리를 잃는다.
+ */
+function sizeFor(page: number): number {
+  return Math.min(PAGE_SIZE * page, MAX_SIZE);
+}
+
 /** 탐색 조건을 목록 질의로 옮긴다. 시트 스냅 같은 화면 상태는 보내지 않는다. */
 function toListQuery(state: ExploreState): URLSearchParams {
   const query = new URLSearchParams();
   if (state.regionCode) query.set("sigunguCode", state.regionCode);
-  query.set("size", String(PAGE_SIZE));
+  query.set("size", String(sizeFor(state.page)));
   query.set("sort", toBackendSort(state.sort));
 
   // 날짜 모드를 보내야 항목마다 `visitTiming` 이 따라온다. 확정 모드만 날짜를 함께 보낸다.
@@ -88,14 +134,15 @@ function toListQuery(state: ExploreState): URLSearchParams {
  * 프론트가 판정하지 않고 백엔드의 `resultType` 이 말한다 — 동의어·오타 정규화가
  * 백엔드에 있기 때문이다 (themes.ts).
  *
- * 이 입구는 날짜 탐색과 정렬을 받지 않는다. 그래서 검색 결과 카드에는
- * 예측 요약이 비어 있고, 화면은 그 자리를 `예측 정보 없음`으로 채운다.
+ * 이 입구는 날짜 탐색과 정렬을 받지 않는다 — `dateMode`·`visitDate` 파라미터가
+ * 아예 없다(mamoki-contest/tour_backend#98). 받지 않는 값을 보내면 조용히 버려질 뿐이라
+ * 보내지 않고, 검색 결과 카드의 빈 예측 자리는 화면이 `예측 정보 없음`으로 채운다.
  */
 function toSearchQuery(state: ExploreState, term: string): URLSearchParams {
   const query = new URLSearchParams();
   query.set("query", term);
   if (state.regionCode) query.set("sigunguCode", state.regionCode);
-  query.set("size", String(PAGE_SIZE));
+  query.set("size", String(sizeFor(state.page)));
   return query;
 }
 
@@ -115,27 +162,57 @@ function toSearchInfo(data: BackendSearchResponse): PlaceListSearch {
   };
 }
 
+/**
+ * 응답이 말하는 예측 지원 창을 찾는다.
+ *
+ * 항목마다 실려 오고 값은 모두 같다. 날짜를 보내지 않은 조회에는 아예 없으므로,
+ * 없으면 없다고 말한다 — 화면이 스스로 30일을 지어내던 자리를 이 값이 대신한다.
+ */
+function toForecastWindow(items: BackendAttraction[] | null | undefined): SupportedWindow | null {
+  if (!Array.isArray(items)) return null;
+  for (const item of items) {
+    const from = text(item?.visitTiming?.supportedFrom);
+    const to = text(item?.visitTiming?.supportedTo);
+    if (from && to) return { from, to };
+  }
+  return null;
+}
+
 function toListResponse(
   data: BackendListResponse,
   search: PlaceListSearch | null,
   requestedSort: string | null,
-): PlaceListResponse {
+  page: number,
+): PlaceListPage {
+  const places = toPlaces(data.items);
+  const totalCount = num(data.totalCount);
+  const size = sizeFor(page);
+  /*
+   * 아직 못 받은 항목이 남았는지. 전체 개수를 알면 그것과 견주고, 모르면 부른 만큼
+   * 꽉 채워 왔는지로 짐작한다 — 모자라게 왔다면 그것이 끝이다.
+   */
+  const hasRemaining = totalCount !== null ? places.length < totalCount : places.length >= size;
+
   return {
-    places: toPlaces(data.items),
-    totalCount: num(data.totalCount),
+    places,
+    totalCount,
     search,
     // 백엔드가 적용한 정렬을 그대로 되돌려준다. 요청과 다르면 적용되지 않은 것이다.
     sortApplied: requestedSort !== null && data.sort === requestedSort,
     status: toDataStatus(data.dataStatus),
     source: text(data.source),
     observedAt: text(data.collectedAt),
+    page,
+    hasMore: hasRemaining && size < MAX_SIZE,
+    reachedLimit: hasRemaining && size >= MAX_SIZE,
+    forecastWindow: toForecastWindow(data.items),
   };
 }
 
 export async function fetchPlaceList(
   signal?: AbortSignal,
   state: ExploreState = DEFAULT_EXPLORE_STATE,
-): Promise<PlaceListResult> {
+): Promise<PlaceListPageResult> {
   // 테마가 우선이다 — 시트가 테마를 적용할 때 검색어를 비우므로 둘이 함께 오지 않는다.
   const term = state.theme ?? state.query;
 
@@ -148,7 +225,7 @@ export async function fetchPlaceList(
       signal,
     );
     return result.ok
-      ? { ok: true, data: toListResponse(result.data, toSearchInfo(result.data), null) }
+      ? { ok: true, data: toListResponse(result.data, toSearchInfo(result.data), null, state.page) }
       : { ok: false, failure: result.failure };
   }
 
@@ -162,7 +239,7 @@ export async function fetchPlaceList(
     signal,
   );
   if (result.ok) {
-    return { ok: true, data: toListResponse(result.data, null, sort) };
+    return { ok: true, data: toListResponse(result.data, null, sort, state.page) };
   }
 
   /*
@@ -186,6 +263,24 @@ export async function fetchPlaceList(
     signal,
   );
   return retried.ok
-    ? { ok: true, data: toListResponse(retried.data, null, null) }
+    ? { ok: true, data: toListResponse(retried.data, null, null, state.page) }
     : { ok: false, failure: retried.failure };
+}
+
+/**
+ * 예측 지원 창만 따로 묻는다 (#30 M3).
+ *
+ * 나만의 지도에는 관광지 목록이 없어 창을 함께 받을 자리가 없다. 방문 예정일을
+ * 고르는 자리가 거기라, 한 곳만 부르는 가장 싼 조회로 창을 받아 온다. 실패하면
+ * null — 그때만 화면이 스스로 계산한 30일로 되돌아간다.
+ */
+export async function fetchForecastWindow(signal?: AbortSignal): Promise<SupportedWindow | null> {
+  const query = new URLSearchParams({ size: "1", dateMode: "FLEXIBLE" });
+  const result = await fetchEnvelope<BackendListResponse>(
+    "/api/v1/attractions",
+    query,
+    LIST_DATA_NAME,
+    signal,
+  );
+  return result.ok ? toForecastWindow(result.data.items) : null;
 }
