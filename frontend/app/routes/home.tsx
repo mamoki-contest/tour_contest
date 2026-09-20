@@ -1,6 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  Link,
+  useLocation,
   useNavigate,
+  useNavigation,
   useRevalidator,
   useSearchParams,
   type ShouldRevalidateFunctionArgs,
@@ -13,13 +16,19 @@ import { ConditionBar } from "../components/condition-bar";
 import { SaveButton } from "../components/save-controls";
 import { useCollection } from "../lib/use-collection";
 import { DateSheet } from "../components/date-sheet";
+import { HelpButton, HelpSheet } from "../components/help-sheet";
 import { RegionSheet } from "../components/region-sheet";
-import { SearchSheet } from "../components/search-sheet";
+import {
+  GeneralSearchNotice,
+  SearchSheet,
+  SuggestedThemes,
+  ThemeNormalizedNotice,
+} from "../components/search-sheet";
 import { MapView, type MapLoadState } from "../components/map-view";
 import { MapLegend, MapZone, type MapStatus } from "../components/map-zone";
 import { PlaceCard, PlaceCardSkeleton } from "../components/place-card";
-import { InterestSourceNote, SortToggle } from "../components/sort-toggle";
-import { EmptyState, ErrorState, SecondaryButton } from "../components/states";
+import { SortToggle } from "../components/sort-toggle";
+import { DataNote, EmptyState, ErrorState, SecondaryButton, StaleNote } from "../components/states";
 import {
   exploreHref,
   hasDroppedDate,
@@ -32,9 +41,15 @@ import {
   type OpenSheet,
   type SheetSnap,
 } from "../lib/explore-params";
+import { formatBaselineCaption, formatStaleCaption, isStale } from "../lib/data-status";
+import { readHelpSeen, markHelpSeen } from "../lib/help-seen";
+import { isListQueryNavigation, isPageNavigation } from "../lib/list-loading";
+import { listHeading } from "../lib/list-heading";
+import { normalizedTheme, searchNotice } from "../lib/search-notice";
+import { unrankedBoundary } from "../lib/unranked";
 import { fetchPlaceList } from "../lib/places.server";
 import { fetchRegionVisitScale } from "../lib/regions.server";
-import { formatObservedAt, formatVisitPeriodShort } from "../lib/format";
+import { formatVisitPeriodShort } from "../lib/format";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -149,7 +164,21 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
-  const loading = revalidator.state !== "idle";
+
+  /*
+   * 로딩 표시는 두 갈래에서 온다 (#20).
+   *
+   * `다시 시도`는 재검증(`useRevalidator`)이지만, 사용자가 겪는 조건 변경은 전부
+   * `<Link>`·`navigate()` 라 내비게이션을 탄다. 재검증만 보던 동안에는 정렬을 뒤집어도
+   * 시·군을 골라도 스켈레톤이 한 번도 켜지지 않았다. 그렇다고 모든 이동에 켜면
+   * 시트를 열고 닫는 것만으로 읽던 목록이 사라지므로, 조회 조건이 바뀐 이동만 센다.
+   */
+  const navigation = useNavigation();
+  const location = useLocation();
+  const listLoading =
+    revalidator.state !== "idle" || isListQueryNavigation(location, navigation.location);
+  // `더 보기`는 읽던 목록을 덮지 않는다 — 버튼 자신이 진행 중임을 말한다.
+  const loadingMore = isPageNavigation(location, navigation.location);
 
   // 로더 데이터가 아니라 살아 있는 URL에서 읽는다 — 스냅 변화는 로더를 다시 돌리지 않는다.
   const state = parseExploreState(searchParams);
@@ -159,8 +188,28 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const regionLabel =
     regions?.regions.find((region) => region.sigunguCode === state.regionCode)?.name ?? null;
 
+  /*
+   * 검색 결과의 성격 (#26 · U18).
+   *
+   * 조건 칩 · 목록 위 안내 · 시트 헤더가 **같은 판정**을 쓴다. 세 곳이 각자 판단하면
+   * 언젠가 서로 다른 말을 하고, 사용자는 어느 쪽이 지금 걸린 조건인지 알 수 없게 된다.
+   */
+  const search = data?.search ?? null;
+  const noticeInput = { theme: state.theme, query: state.query, search };
+  const appliedTheme = normalizedTheme(noticeInput);
+  const notice = searchNotice(noticeInput);
+
   // 키가 없으면 시도할 것도 없다. 있으면 SDK가 뜰 때까지 로딩으로 둔다.
   const [mapLoad, setMapLoad] = useState<MapLoadState>(kakaoAppKey ? "LOADING" : "FAILED");
+
+  /*
+   * 도움말을 이미 봤는지 (#35, WIREFRAME R1).
+   *
+   * 서버는 이 값을 알 수 없으므로 첫 렌더는 `봤다`로 시작한다 — 반대로 두면 하이드레이션
+   * 직후 점이 한 번 깜빡였다가 사라진다.
+   */
+  const [helpSeen, setHelpSeen] = useState(true);
+  useEffect(() => setHelpSeen(readHelpSeen()), []);
 
   const searchThisArea = useCallback(
     (bounds: MapBounds) => {
@@ -199,10 +248,17 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     [navigate],
   );
 
+  const openHelp = useCallback(() => {
+    markHelpSeen();
+    setHelpSeen(true);
+    openSheet("help");
+  }, [openSheet]);
+
   /** 시트가 확정한 조건은 열림 상태를 지우고 적용한다 — 시트가 닫히면서 결과가 보인다. */
   const applyFromSheet = useCallback(
     (next: Partial<ExploreState>) => {
-      navigate(exploreHref({ ...state, ...next, sheet: null }), {
+      // 조건이 바뀌면 지금까지 늘려 둔 쪽은 다른 목록의 쪽이다 — 첫 쪽부터 다시 읽는다.
+      navigate(exploreHref({ ...state, ...next, page: 1, sheet: null }), {
         replace: true,
         preventScrollReset: true,
       });
@@ -216,6 +272,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       navigate(exploreHref({ ...state, snap }), { replace: true, preventScrollReset: true });
     },
     [navigate, state],
+  );
+
+  /** 제안 테마로 다시 찾는 주소 — 걸려 있던 시·군·날짜는 지키고 검색어만 바꾼다. */
+  const themeHref = useCallback(
+    (theme: string) => exploreHref({ ...state, theme, query: null, page: 1, sheet: null }),
+    [state],
   );
 
   /**
@@ -249,6 +311,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     />
   );
 
+  /*
+   * 온라인 언급 미산정 구역이 시작하는 자리 (#27, U17 · D7).
+   *
+   * 검색 결과에는 그리지 않는다 — 검색 입구는 정렬을 받지 않아 뒤쪽에 모아 준다는
+   * 보장이 없고, 보장 없는 자리에 선을 그으면 없는 구조를 지어내는 셈이 된다.
+   */
+  const unrankedFrom =
+    data && data.search === null && data.sortApplied ? unrankedBoundary(data.places) : null;
+
   return (
     <div className="relative h-dvh overflow-hidden lg:grid lg:h-dvh lg:grid-cols-[1fr_480px] lg:gap-0 lg:overflow-hidden">
       <MapZone status={mapStatus} onRetry={() => revalidator.revalidate()} legend={legend}>
@@ -264,16 +335,31 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             onViewportChange={rememberViewport}
           />
         ) : null}
-        <TopBar state={state} regionLabel={regionLabel} onOpenSheet={openSheet} />
+        <TopBar
+          state={state}
+          regionLabel={regionLabel}
+          appliedTheme={appliedTheme}
+          onOpenSheet={openSheet}
+        />
       </MapZone>
 
       <BottomSheet
         snap={effectiveSnap}
         onSnapChange={setSnap}
         legend={legend}
-        header={<SheetHeader state={state} data={data} dropped={dropped} />}
+        header={
+          <SheetHeader
+            state={state}
+            data={data}
+            regionLabel={regionLabel}
+            appliedTheme={appliedTheme}
+            dropped={dropped}
+            helpSeen={helpSeen}
+            onOpenHelp={openHelp}
+          />
+        }
       >
-        {loading ? (
+        {listLoading ? (
           <PlaceList>
             <PlaceCardSkeleton />
             <PlaceCardSkeleton />
@@ -285,37 +371,56 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             action={<SecondaryButton onClick={() => revalidator.revalidate()}>다시 시도</SecondaryButton>}
           />
         ) : !data || data.places.length === 0 ? (
-          <EmptyState
-            message="이 범위에 관광지가 없어요."
-            action={<SecondaryButton onClick={() => revalidator.revalidate()}>다시 불러오기</SecondaryButton>}
-          />
+          <NoResults state={state} search={search} themeHref={themeHref} onRetry={() => revalidator.revalidate()} />
         ) : (
-          <PlaceList>
-            {data.places.map((place) => (
-              <PlaceCard
-                key={place.placeId}
-                place={place}
-                dateMode={state.dateMode}
-                saveButton={
-                  <SaveButton
-                    saved={collection.isSaved(place.placeId)}
-                    placeName={place.name}
-                    onToggle={() =>
-                      collection.isSaved(place.placeId)
-                        ? collection.remove(place.placeId)
-                        : collection.save({
-                            placeId: place.placeId,
-                            name: place.name,
-                            address: place.address,
-                            photoUrl: place.photoUrl,
-                            coordinates: place.coordinates,
-                          })
+          <>
+            {/*
+              지원 테마 결과와 일반 검색 결과는 신뢰 수준이 다르다 (ADR-0003).
+              같은 목록 모양으로 오기 때문에, 어느 쪽인지 목록 맨 앞에서 밝힌다 (U18).
+            */}
+            {notice.kind === "THEME_NORMALIZED" ? (
+              <div className="mb-6">
+                <ThemeNormalizedNotice rawQuery={notice.rawQuery} appliedTheme={notice.theme} />
+              </div>
+            ) : notice.kind === "GENERAL_SEARCH" ? (
+              <div className="mb-6">
+                <GeneralSearchNotice query={notice.query} />
+              </div>
+            ) : null}
+
+            <PlaceList>
+              {data.places.map((place, index) => (
+                <div key={place.placeId}>
+                  {index === unrankedFrom ? (
+                    <UnrankedDivider count={data.places.length - index} />
+                  ) : null}
+                  <PlaceCard
+                    place={place}
+                    dateMode={state.dateMode}
+                    saveButton={
+                      <SaveButton
+                        saved={collection.isSaved(place.placeId)}
+                        placeName={place.name}
+                        onToggle={() =>
+                          collection.isSaved(place.placeId)
+                            ? collection.remove(place.placeId)
+                            : collection.save({
+                                placeId: place.placeId,
+                                name: place.name,
+                                address: place.address,
+                                photoUrl: place.photoUrl,
+                                coordinates: place.coordinates,
+                              })
+                        }
+                      />
                     }
                   />
-                }
-              />
-            ))}
-          </PlaceList>
+                </div>
+              ))}
+            </PlaceList>
+
+            <MoreButton state={state} data={data} loading={loadingMore} />
+          </>
         )}
       </BottomSheet>
 
@@ -343,10 +448,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       {state.sheet === "date" ? (
         <DateSheet
           state={state}
+          // 고를 수 있는 날은 응답이 말하는 예측 지원 창까지다 (#30 M3).
+          supported={data?.forecastWindow ?? null}
           onClose={closeSheet}
           onApply={(dateMode, date) => applyFromSheet({ dateMode, date })}
         />
       ) : null}
+
+      {state.sheet === "help" ? <HelpSheet onClose={closeSheet} /> : null}
     </div>
   );
 }
@@ -358,10 +467,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 function TopBar({
   state,
   regionLabel,
+  appliedTheme,
   onOpenSheet,
 }: {
   state: ExploreState;
   regionLabel: string | null;
+  /** 백엔드가 검색어를 지원 테마로 정규화했을 때 그 테마 이름. 아니면 null. */
+  appliedTheme: string | null;
   onOpenSheet: (sheet: OpenSheet) => void;
 }) {
   return (
@@ -371,6 +483,7 @@ function TopBar({
       <ConditionBar
         state={state}
         regionLabel={regionLabel}
+        normalizedTheme={appliedTheme}
         onOpenRegion={() => onOpenSheet("region")}
         onOpenSearch={() => onOpenSheet("search")}
         onOpenDate={() => onOpenSheet("date")}
@@ -382,43 +495,55 @@ function TopBar({
 function SheetHeader({
   state,
   data,
+  regionLabel,
+  appliedTheme,
   dropped,
+  helpSeen,
+  onOpenHelp,
 }: {
   state: ExploreState;
   data: Route.ComponentProps["loaderData"]["data"];
+  regionLabel: string | null;
+  /** 백엔드가 검색어를 지원 테마로 정규화했을 때 그 테마 이름. 아니면 null. */
+  appliedTheme: string | null;
   dropped: Route.ComponentProps["loaderData"]["dropped"];
+  helpSeen: boolean;
+  onOpenHelp: () => void;
 }) {
-  // 조회 범위의 전체 개수와 지금 화면에 온 개수는 다르다. 첫 쪽만 받아 놓고
-  // 전체 개수를 `이만큼 보여준다`로 읽히게 두지 않는다.
-  const shown = data?.places.length ?? 0;
-  const total = data?.totalCount ?? null;
+  /*
+   * 헤더는 지금 걸린 조회 범위를 말한다 (#25).
+   *
+   * 오래 `이 지도 범위 N곳` 하나로 고정돼 있어서, 춘천시를 골라도 테마로 찾아도
+   * 지도가 아예 안 떠도 같은 문장이었다 — 조건 칩과 목록이 다른 범위를 말했다.
+   */
+  const heading = listHeading({
+    hasBounds: state.bounds !== null,
+    regionLabel,
+    theme: state.theme ?? appliedTheme,
+    query: appliedTheme ? null : state.query,
+    count: data?.totalCount ?? data?.places.length ?? null,
+  });
 
   return (
     <div className="pt-2 lg:px-6 lg:pt-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="type-headline-md text-grey-800">
-          {data ? `이 지도 범위 ${total ?? shown}곳` : "이 지도 범위"}
-        </h2>
-        <SortToggle state={state} />
+        <h2 className="type-headline-md text-grey-800">{heading}</h2>
+        <div className="flex items-center gap-2">
+          <SortToggle state={state} />
+          {/* 신호 설명은 화면마다 반복하지 않고 이 한 자리에 모았다 (#35). */}
+          <HelpButton unseen={!helpSeen} onOpen={onOpenHelp} />
+        </div>
       </div>
 
-      {total !== null && total > shown ? (
-        <p className="type-caption mt-2 text-grey-600">그중 {shown}곳을 먼저 보여드려요</p>
-      ) : null}
-
-      {/* 관심도 캡션은 시트 헤더에 산다. 지도 범례와 같은 시각 블록에 두지 않는다 (U15). */}
-      <InterestSourceNote
-        source={data?.source ?? null}
-        observedAt={formatObservedAt(data?.observedAt ?? null)}
-        // 검색 결과는 애초에 정렬을 요청하지 않는다 — 그 자리에 실패 문구를 띄우지 않는다.
-        sortApplied={data === null || data.search !== null || data.sortApplied}
-      />
-
       {/*
-        지원 테마 결과와 일반 검색 결과는 신뢰 수준이 다르다 (ADR-0003).
-        같은 목록 모양으로 오기 때문에, 어느 쪽인지 문장으로 반드시 밝힌다.
+        캡션은 기준 시점 한 줄뿐이다 (#35). 값이 낡았을 때만(`STALE`) 그 사실이
+        시점보다 먼저 온다 — 최신인 줄 알고 움직이면 헛걸음이 되기 때문이다 (#21).
       */}
-      {data?.search ? <SearchNotice search={data.search} /> : null}
+      {isStale(data?.status) ? (
+        <StaleNote caption={formatStaleCaption(data?.observedAt ?? null)} />
+      ) : (
+        <DataNote>{formatBaselineCaption(data?.observedAt ?? null)}</DataNote>
+      )}
 
       <DroppedConditionNotice dropped={dropped} />
     </div>
@@ -442,31 +567,102 @@ function DroppedConditionNotice({
   return (
     <p className="type-body-md mt-2 rounded-lg bg-grey-100 p-3 text-grey-700">
       {dropped.date
-        ? "고른 날짜가 예측이 닿는 30일 밖이라 날짜 조건을 풀었어요."
+        ? "고른 날짜는 예측이 닿지 않아 날짜 조건을 풀었어요."
         : "그 시·군을 찾을 수 없어 강원 전체로 보여드려요."}
     </p>
   );
 }
 
-function SearchNotice({ search }: { search: NonNullable<Route.ComponentProps["loaderData"]["data"]>["search"] }) {
-  if (!search) return null;
+/**
+ * 온라인 언급 미산정 구역의 머리 (#27, U17 · D7).
+ *
+ * 이 아래 장소들은 **낮은 관심도가 아니라 값이 없는 것**이다. 순위 안에 섞어 두면
+ * 꼴찌로 읽히므로 선을 그어 구역을 가른다. 왜 순위에 넣지 않았는지는 도움말이 말한다.
+ */
+function UnrankedDivider({ count }: { count: number }) {
+  return (
+    <div className="mb-6 flex items-center gap-3">
+      <span className="h-px grow bg-grey-200" aria-hidden="true" />
+      <span className="type-label-md shrink-0 text-grey-700">온라인 언급 정보 없음 {count}곳</span>
+      <span className="h-px grow bg-grey-200" aria-hidden="true" />
+    </div>
+  );
+}
+
+/**
+ * 21번째 이후로 가는 길 (#30 M4).
+ *
+ * 쪽을 나눠 따로 보여주지 않고 읽던 목록을 늘린다. 주소에 쪽 수가 적히므로 상세에
+ * 들어갔다 돌아와도 늘려 둔 자리가 그대로 있다 (U6).
+ */
+function MoreButton({
+  state,
+  data,
+  loading,
+}: {
+  state: ExploreState;
+  data: NonNullable<Route.ComponentProps["loaderData"]["data"]>;
+  loading: boolean;
+}) {
+  if (data.reachedLimit) {
+    // 끝에 닿았다는 사실을 숨기고 버튼만 지우면, 사용자는 목록이 여기까지인 줄 안다.
+    return (
+      <p className="type-body-md mt-6 rounded-lg bg-grey-100 p-3 text-grey-700">
+        여기까지 {data.places.length}곳을 봤어요. 시·군이나 테마로 좁히면 나머지를 찾을 수 있어요.
+      </p>
+    );
+  }
+
+  if (!data.hasMore) return null;
 
   return (
-    <div className="type-body-md mt-2 rounded-lg bg-grey-100 p-3 text-grey-700">
-      {search.resultType === "SUPPORTED_THEME" ? (
-        <p>
-          {search.appliedTheme ? `${search.appliedTheme} ` : ""}테마에 맞는 곳만 골라 보여드려요.
-        </p>
-      ) : (
-        <p>검색어와 관련된 결과예요. 테마에 맞는지는 확인하지 못했어요.</p>
-      )}
+    <Link
+      to={exploreHref({ ...state, page: state.page + 1 })}
+      replace
+      preventScrollReset
+      aria-disabled={loading}
+      className="type-label-lg mt-6 flex h-12 w-full items-center justify-center rounded-md bg-grey-100 text-grey-700 transition-colors duration-200 hover:bg-grey-200"
+    >
+      {loading ? "불러오는 중" : "더 보기"}
+    </Link>
+  );
+}
 
-      {search.suggestedThemes.length > 0 ? (
-        <p className="type-caption mt-2 text-grey-600">
-          이런 테마는 어떠세요 — {search.suggestedThemes.join(" · ")}
-        </p>
-      ) : null}
-    </div>
+/**
+ * 결과가 없을 때 (#29).
+ *
+ * 검색이 0건인 것과 조회 범위가 비어 있는 것은 **다른 사정**이고 다음 행동도 다르다.
+ * 전에는 둘 다 `이 범위에 관광지가 없어요`였는데, `즐라탄`을 친 사람에게 범위 이야기를
+ * 하는 것은 엉뚱한 곳을 고치라는 말과 같다. 그리고 그 옆에 붙던 제안 테마는 누를 수
+ * 없는 글자였다 — 0건 화면에서 유일하게 다음으로 갈 자리였는데도.
+ */
+function NoResults({
+  state,
+  search,
+  themeHref,
+  onRetry,
+}: {
+  state: ExploreState;
+  search: NonNullable<Route.ComponentProps["loaderData"]["data"]>["search"];
+  themeHref: (theme: string) => string;
+  onRetry: () => void;
+}) {
+  const term = state.query ?? state.theme;
+
+  if (search && term) {
+    return (
+      <>
+        <EmptyState message={`'${term}'에 맞는 관광지가 없어요.`} />
+        <SuggestedThemes themes={search.suggestedThemes} hrefFor={themeHref} />
+      </>
+    );
+  }
+
+  return (
+    <EmptyState
+      message="이 범위에 관광지가 없어요."
+      action={<SecondaryButton onClick={onRetry}>다시 불러오기</SecondaryButton>}
+    />
   );
 }
 
