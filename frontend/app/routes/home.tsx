@@ -34,7 +34,7 @@ import {
 } from "../lib/explore-params";
 import { fetchPlaceList } from "../lib/places.server";
 import { fetchRegionVisitScale } from "../lib/regions.server";
-import { formatObservedAt, formatVisitPeriod } from "../lib/format";
+import { formatObservedAt, formatVisitPeriodShort } from "../lib/format";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -231,9 +231,27 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   // 지도를 못 띄우면 목록만으로 탐색할 수 있게 시트를 접히지 않게 한다 (U8).
   const effectiveSnap = mapStatus === "MAP_FAILED" && state.snap === "peek" ? "middle" : state.snap;
 
+  /**
+   * 범례는 두 자리에 산다 — 모바일은 시트 위(U1), 데스크톱은 지도 좌하단.
+   *
+   * 지도가 실패해도 그린다. 방문 규모 값과 기준 기간은 지도와 함께 죽지 않으며,
+   * 색을 못 칠하는 동안에는 이 카드가 시·군 방문 규모로 가는 입구가 된다.
+   * 관심도 캡션(시트 헤더)과는 끝까지 다른 블록에 둔다 (U15).
+   */
+  const legend = (
+    <MapLegend
+      status={mapStatus}
+      periodLabel={formatVisitPeriodShort(
+        regions?.periodStart ?? null,
+        regions?.periodEnd ?? null,
+      )}
+      onOpenRegions={() => openSheet("region")}
+    />
+  );
+
   return (
     <div className="relative h-dvh overflow-hidden lg:grid lg:h-dvh lg:grid-cols-[1fr_480px] lg:gap-0 lg:overflow-hidden">
-      <MapZone status={mapStatus} onRetry={() => revalidator.revalidate()}>
+      <MapZone status={mapStatus} onRetry={() => revalidator.revalidate()} legend={legend}>
         {kakaoAppKey ? (
           <MapView
             appKey={kakaoAppKey}
@@ -252,16 +270,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <BottomSheet
         snap={effectiveSnap}
         onSnapChange={setSnap}
-        // 지도가 안 뜨면 설명할 색도 없다. 범례를 남기면 실패 안내만 가린다.
-        legend={
-          mapStatus === "MAP_FAILED" ? null : (
-            <MapLegend
-              status={mapStatus}
-              periodLabel={formatVisitPeriod(regions?.periodStart ?? null, regions?.periodEnd ?? null)}
-              source={regions?.source ?? null}
-            />
-          )
-        }
+        legend={legend}
         header={<SheetHeader state={state} data={data} dropped={dropped} />}
       >
         {loading ? (

@@ -45,3 +45,17 @@ export function formatVisitPeriod(start: string | null, end: string | null): str
   if (!start || !end) return null;
   return `${start.replaceAll("-", ".")} ~ ${end.replaceAll("-", ".")} 기준`;
 }
+
+/**
+ * 같은 기간을 좁은 자리에 넣는 짧은 꼴 — `2026.08.16 ~ 08.22 기준`.
+ *
+ * 지도 범례는 지도 위에 얹히고 데스크톱에서는 목록 컬럼 옆에 좁게 선다. 한 주 안의
+ * 기간이라 뒤쪽 연도는 앞과 늘 같으므로, 같을 때만 떨어뜨려 줄을 아낀다.
+ */
+export function formatVisitPeriodShort(start: string | null, end: string | null): string | null {
+  if (!start || !end) return null;
+  const from = start.replaceAll("-", ".");
+  const to = end.replaceAll("-", ".");
+  const sameYear = start.slice(0, 4) === end.slice(0, 4);
+  return `${from} ~ ${sameYear ? to.slice(5) : to} 기준`;
+}
