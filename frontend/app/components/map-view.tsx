@@ -32,7 +32,6 @@ const EDGE_PADDING = 16;
  */
 const PROGRAMMATIC_QUIET_MS = 400;
 
-
 function isDesktopViewport(): boolean {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(min-width: 1024px)").matches;

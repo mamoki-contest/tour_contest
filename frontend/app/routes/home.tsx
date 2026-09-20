@@ -24,6 +24,8 @@ import {
   exploreHref,
   hasDroppedDate,
   parseExploreState,
+  withMapBounds,
+  withRegionCode,
   type ExploreState,
   type MapBounds,
   type MapViewport,
@@ -163,7 +165,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const searchThisArea = useCallback(
     (bounds: MapBounds) => {
       // 지도를 움직인 것만으로는 목록이 바뀌지 않는다 — 사용자가 눌러야 범위가 확정된다.
-      navigate(exploreHref({ ...state, bounds }), { preventScrollReset: true });
+      // 시·군 조건은 함께 풀린다: 두 범위가 AND 로 걸리면 조건 칩이 말하는 범위와
+      // 실제 조회 범위가 달라진다.
+      navigate(exploreHref(withMapBounds(state, bounds)), { preventScrollReset: true });
     },
     [navigate, state],
   );
@@ -314,7 +318,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           data={regions}
           onClose={closeSheet}
           // 시·군을 고르면 지도 경계 조건은 지운다 — 두 범위가 겹치면 어느 쪽인지 알 수 없다.
-          onSelect={(regionCode) => applyFromSheet({ regionCode, bounds: null })}
+          onSelect={(regionCode) => applyFromSheet(withRegionCode(state, regionCode))}
         />
       ) : null}
 

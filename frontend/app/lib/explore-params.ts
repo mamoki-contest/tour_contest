@@ -157,6 +157,33 @@ export function formatViewportCenter(viewport: MapViewport): string {
   return `${viewport.lat.toFixed(6)},${viewport.lng.toFixed(6)}`;
 }
 
+/**
+ * `이 지도 영역에서 검색` 이 확정하는 상태.
+ *
+ * 시·군 조건을 함께 지운다. 둘을 같이 두면 백엔드에서 AND 로 걸려 조회 범위가
+ * 어느 쪽도 아니게 되는데, 조건 칩은 시·군 이름만 말해 사용자가 그 사실을 알 수
+ * 없다. 반대 방향(`withRegionCode`)과 대칭이다.
+ */
+export function withMapBounds(state: ExploreState, bounds: MapBounds): ExploreState {
+  return { ...state, bounds, regionCode: null };
+}
+
+/**
+ * 시·군을 고르면 지도 경계 조건은 지운다 — `withMapBounds` 의 반대 방향.
+ *
+ * 새 시·군을 고르면 지도가 그리로 옮겨 가므로, 주소에 적어 둔 **옛 위치는 버린다.**
+ * 남겨 두면 상세에서 뒤로 왔을 때 고른 시·군이 아니라 고르기 전 자리로 되돌아간다.
+ * 강원 전체로 되돌릴 때는 지도를 움직이지 않으니 보던 자리도 그대로 둔다.
+ */
+export function withRegionCode(state: ExploreState, regionCode: string | null): ExploreState {
+  return {
+    ...state,
+    regionCode,
+    bounds: null,
+    viewport: regionCode === null ? state.viewport : null,
+  };
+}
+
 export function parseExploreState(params: URLSearchParams, now: Date = new Date()): ExploreState {
   const sortRaw = params.get("sort");
   const snapRaw = params.get("snap");
