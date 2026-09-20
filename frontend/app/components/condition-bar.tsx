@@ -17,6 +17,7 @@ import {
 export function ConditionBar({
   state,
   regionLabel,
+  normalizedTheme = null,
   onOpenRegion,
   onOpenSearch,
   onOpenDate,
@@ -24,6 +25,13 @@ export function ConditionBar({
   state: ExploreState;
   /** 선택된 시·군 이름. 없으면 `강원 전체`. */
   regionLabel: string | null;
+  /**
+   * 백엔드가 검색어를 지원 테마로 정규화했을 때 그 테마 이름 (#26).
+   *
+   * 입력은 `해수용장`이었지만 목록은 해수욕장 테마 결과다. 칩이 입력어를 그대로
+   * 되뇌면 조건 칩과 결과가 어긋나고, 사용자는 일반 검색 결과를 보고 있다고 믿는다.
+   */
+  normalizedTheme?: string | null;
   /** 탐색 범위 시트를 여는 동작. 없으면 칩이 현재 값만 말하는 상태 표시로 남는다. */
   onOpenRegion?: () => void;
   /** 검색 시트를 여는 동작. 아직 없으면 칩이 현재 값만 말하는 상태 표시로 남는다. */
@@ -31,7 +39,8 @@ export function ConditionBar({
   /** 날짜 시트를 여는 동작. 없으면 마찬가지로 상태 표시로 남는다. */
   onOpenDate?: () => void;
 }) {
-  const themeLabel = state.theme ?? (state.query ? `'${state.query}' 검색` : "무테마");
+  const themeLabel =
+    state.theme ?? normalizedTheme ?? (state.query ? `'${state.query}' 검색` : "무테마");
   const dateLabel =
     state.dateMode === "FIXED" && state.date ? formatChipDate(state.date) : "날짜 미정";
   const sortLabel = state.sort === "INTEREST_DESC" ? "인기 많은 순" : "덜 알려진 순";
