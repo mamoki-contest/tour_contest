@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
 
 import type { Route } from "./+types/place-detail";
 import type { RelatedPlacesGroup } from "../lib/contract";
@@ -7,7 +7,8 @@ import { ForecastGrid } from "../components/forecast-grid";
 import { RelatedPlaceCard } from "../components/place-card";
 import { useCollection } from "../lib/use-collection";
 import { CurrentAccessSection } from "../components/road-status";
-import { EmptyState, ErrorState } from "../components/states";
+import { EmptyState, ErrorState, SecondaryButton } from "../components/states";
+import { backHref, shouldUseHistoryBack } from "../lib/back-link";
 import { parseExploreState } from "../lib/explore-params";
 import { fetchPlaceDetail } from "../lib/place-detail.server";
 import { formatSourceCaption } from "../lib/format";
@@ -21,7 +22,11 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   if (!result.ok) {
     console.error(`[detail] ${result.failure.dataName} 조회 실패: ${result.failure.cause}`);
-    return { detail: null, error: { dataName: result.failure.dataName } };
+    // 없는 곳인지 부르지 못한 곳인지를 화면까지 들고 간다 — 두 화면의 다음 행동이 다르다.
+    return {
+      detail: null,
+      error: { dataName: result.failure.dataName, notFound: result.failure.notFound },
+    };
   }
 
   return { detail: result.data, error: null };
@@ -33,23 +38,40 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
   // 탐색에서 들고 온 날짜 조건을 상세에서도 그대로 쓴다 — 조건이 화면마다 달라지지 않게.
   const state = parseExploreState(searchParams);
   const collection = useCollection();
+  const revalidator = useRevalidator();
   const saved = detail ? collection.isSaved(detail.placeId) : false;
 
   if (error || !detail) {
     return (
-      <main className="mx-auto min-h-dvh max-w-[1024px] px-gutter py-gutter">
-        <ErrorState
-          dataName={error?.dataName ?? "관광지 정보"}
-          action={
-            <Link
-              to="/"
-              className="type-label-lg inline-flex h-12 items-center rounded-md bg-primary-strong px-4 text-surface transition-colors duration-200 hover:bg-primary-deep"
-            >
-              탐색 홈으로
-            </Link>
-          }
-        />
-      </main>
+      <>
+        <main className="mx-auto min-h-dvh max-w-[1024px] px-gutter py-gutter pb-32">
+          {error?.notFound ? (
+            // 없는 곳에 `다시 시도` 를 주지 않는다 — 몇 번을 눌러도 같은 자리다.
+            <EmptyState
+              message="이 관광지를 찾을 수 없어요. 주소가 잘못됐거나 공급자 목록에서 빠진 곳이에요."
+              action={<HomeLink />}
+            />
+          ) : (
+            <ErrorState
+              dataName={error?.dataName ?? "관광지 정보"}
+              action={
+                <div className="flex flex-wrap items-center gap-3">
+                  <SecondaryButton
+                    onClick={() => revalidator.revalidate()}
+                    disabled={revalidator.state !== "idle"}
+                  >
+                    다시 시도
+                  </SecondaryButton>
+                  <HomeLink />
+                </div>
+              }
+            />
+          )}
+        </main>
+
+        {/* 하단 내비는 모든 화면에서 살아 있다 — 오류 화면도 막다른 길이 아니다. */}
+        <BottomNav savedCount={collection.snapshot.places.length} />
+      </>
     );
   }
 
@@ -57,12 +79,7 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
     <>
       <main className="mx-auto min-h-dvh max-w-[1024px] px-gutter pb-32">
       <div className="sticky top-0 z-10 -mx-gutter bg-grey-50/95 px-gutter py-3 backdrop-blur">
-        <Link
-          to={-1 as unknown as string}
-          className="type-label-md inline-flex h-10 items-center rounded-sm text-grey-700"
-        >
-          ← 뒤로
-        </Link>
+        <BackLink />
       </div>
 
       {detail.photoUrl ? (
@@ -148,6 +165,49 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
 
       <BottomNav savedCount={collection.snapshot.places.length} />
     </>
+  );
+}
+
+/**
+ * `← 뒤로` 비상구 (U9 · H3).
+ *
+ * href 와 클릭이 **다른 일을 한다.** href 는 언제나 앱 안의 실제 주소(탐색 홈 +
+ * 탐색 조건)라 새 탭·가운데 클릭·링크 복사·JS 없는 첫 페인트가 전부 갈 곳이 있고,
+ * 앱 안에서 들어온 경우에만 클릭이 히스토리 한 겹을 되돌린다. 링크로 곧장 들어온
+ * 첫 진입은 뒤로가기를 부르지 않는다 — 그러면 사이트 밖으로 나간다.
+ */
+function BackLink() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  return (
+    <Link
+      to={backHref(location.search)}
+      onClick={(event) => {
+        // 새 탭·새 창으로 여는 수식 클릭은 브라우저에게 맡긴다.
+        if (event.defaultPrevented) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        // 클릭 시점의 히스토리를 본다 — 렌더 중에 읽으면 서버에는 없는 값이다.
+        if (!shouldUseHistoryBack(window.history.state)) return;
+
+        event.preventDefault();
+        navigate(-1);
+      }}
+      className="type-label-md inline-flex h-10 items-center rounded-sm text-grey-700"
+    >
+      ← 뒤로
+    </Link>
+  );
+}
+
+function HomeLink() {
+  return (
+    <Link
+      to="/"
+      className="type-label-lg inline-flex h-12 items-center rounded-md bg-primary-strong px-4 text-surface transition-colors duration-200 hover:bg-primary-deep"
+    >
+      탐색 홈으로
+    </Link>
   );
 }
 
