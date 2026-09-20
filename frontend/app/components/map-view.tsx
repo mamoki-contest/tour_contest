@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Place } from "../lib/contract";
-import type { MapBounds } from "../lib/explore-params";
+import type { MapBounds, MapViewport } from "../lib/explore-params";
 import { boundsFromCorners, sheetCoverHeight, visibleContainerRect } from "../lib/map-viewport";
 import {
   loadKakaoMaps,
@@ -17,6 +17,7 @@ const GANGWON_LEVEL = 12;
 
 /** 경계를 맞출 때 가장자리에 두는 여백(px). 아래쪽만 시트가 덮는 만큼 따로 잡는다. */
 const EDGE_PADDING = 16;
+
 
 function isDesktopViewport(): boolean {
   if (typeof window === "undefined") return false;
@@ -54,14 +55,23 @@ export type MapLoadState = "LOADING" | "READY" | "FAILED";
 export function MapView({
   appKey,
   places,
+  initialViewport,
+  initialBounds,
   onLoadStateChange,
   onSearchThisArea,
+  onViewportChange,
 }: {
   appKey: string;
   places: Place[];
+  /** 주소에 실려 온 지도 위치. 있으면 첫 맞춤이 이 값을 쓴다 (U6). */
+  initialViewport: MapViewport | null;
+  /** 주소에 실려 온 조회 경계. 위치가 없을 때의 차선책 — 조회 범위와 화면을 맞춘다. */
+  initialBounds: MapBounds | null;
   onLoadStateChange: (state: MapLoadState) => void;
   /** 사용자가 `이 지도 영역에서 검색`을 눌렀을 때 확정되는 경계. */
   onSearchThisArea: (bounds: MapBounds) => void;
+  /** 사용자가 지도를 옮길 때마다 주소에 적어 둘 위치. 조회는 다시 돌지 않는다. */
+  onViewportChange: (viewport: MapViewport) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -69,6 +79,16 @@ export function MapView({
   const [loadState, setLoadState] = useState<MapLoadState>("LOADING");
   /** 지도를 움직인 뒤에만 검색 버튼이 나타난다. */
   const [moved, setMoved] = useState(false);
+
+  /** 콜백이 매 렌더 새로 오더라도 지도를 다시 만들지 않게 최신 값만 붙잡아 둔다. */
+  const viewportChangeRef = useRef(onViewportChange);
+  viewportChangeRef.current = onViewportChange;
+
+  /**
+   * 첫 렌더의 주소 상태. 지도 생성 효과는 `appKey` 에만 매달려 있으므로, 그 뒤에
+   * 바뀐 값이 아니라 **마운트 시점의 값**으로 첫 화면을 맞춰야 한다.
+   */
+  const initialRef = useRef({ viewport: initialViewport, bounds: initialBounds });
 
   useEffect(() => {
     onLoadStateChange(loadState);
@@ -87,18 +107,42 @@ export function MapView({
         });
         mapRef.current = map;
 
-        // 시트에 가리지 않는 위쪽 영역에 강원도가 들어오게 맞춘다.
-        map.setBounds(
-          toKakaoBounds(maps, GANGWON_BOUNDS),
-          EDGE_PADDING,
-          EDGE_PADDING,
-          currentSheetCover(),
-          EDGE_PADDING,
-        );
+        const initial = initialRef.current;
+        if (initial.viewport) {
+          // 상세에서 뒤로 온 경우 — 떠날 때 보던 자리를 그대로 되살린다 (U6).
+          map.setCenter(new maps.LatLng(initial.viewport.lat, initial.viewport.lng));
+          map.setLevel(initial.viewport.level);
+        } else if (initial.bounds) {
+          // 조회 범위가 곧 사용자가 본 범위다 — 시트에 가리지 않는 쪽에 그대로 앉힌다.
+          map.setBounds(
+            toKakaoBounds(maps, initial.bounds),
+            EDGE_PADDING,
+            EDGE_PADDING,
+            currentSheetCover(),
+            EDGE_PADDING,
+          );
+        } else {
+          // 시트에 가리지 않는 위쪽 영역에 강원도가 들어오게 맞춘다.
+          map.setBounds(
+            toKakaoBounds(maps, GANGWON_BOUNDS),
+            EDGE_PADDING,
+            EDGE_PADDING,
+            currentSheetCover(),
+            EDGE_PADDING,
+          );
+        }
 
-        const onIdle = () => setMoved(true);
-        maps.event.addListener(map, "dragend", onIdle);
-        maps.event.addListener(map, "zoom_changed", onIdle);
+        const onUserMove = () => {
+          setMoved(true);
+          const center = map.getCenter();
+          viewportChangeRef.current({
+            lat: center.getLat(),
+            lng: center.getLng(),
+            level: map.getLevel(),
+          });
+        };
+        maps.event.addListener(map, "dragend", onUserMove);
+        maps.event.addListener(map, "zoom_changed", onUserMove);
 
         setLoadState("READY");
       })

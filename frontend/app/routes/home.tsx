@@ -26,6 +26,7 @@ import {
   parseExploreState,
   type ExploreState,
   type MapBounds,
+  type MapViewport,
   type OpenSheet,
   type SheetSnap,
 } from "../lib/explore-params";
@@ -100,7 +101,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { data: result.data, regions: regionData, dropped, kakaoAppKey, error: null };
 }
 
-/** 시트를 끌어올린 것만으로 목록을 다시 부르지 않는다 — 스냅은 화면 상태지 조회 조건이 아니다. */
+/**
+ * 화면 상태만 바뀐 이동은 목록을 다시 부르지 않는다.
+ *
+ * 시트 스냅(`snap`)과 지도 위치(`c`·`z`)가 그것이다. 특히 지도 위치는 **사용자가 지도를
+ * 미는 동안 계속 바뀐다** — 여기서 걸러 내지 않으면 손가락을 뗄 때마다 목록 전체를
+ * 다시 부른다. 조회 범위는 `이 지도 영역에서 검색` 을 눌러야 확정되는 `bbox` 쪽이다.
+ */
+const VIEW_ONLY_PARAMS = ["snap", "c", "z"];
+
 export function shouldRevalidate({
   currentUrl,
   nextUrl,
@@ -108,8 +117,10 @@ export function shouldRevalidate({
 }: ShouldRevalidateFunctionArgs) {
   const current = new URLSearchParams(currentUrl.search);
   const next = new URLSearchParams(nextUrl.search);
-  current.delete("snap");
-  next.delete("snap");
+  for (const key of VIEW_ONLY_PARAMS) {
+    current.delete(key);
+    next.delete(key);
+  }
   if (currentUrl.pathname === nextUrl.pathname && current.toString() === next.toString()) {
     return false;
   }
@@ -138,6 +149,22 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     (bounds: MapBounds) => {
       // 지도를 움직인 것만으로는 목록이 바뀌지 않는다 — 사용자가 눌러야 범위가 확정된다.
       navigate(exploreHref({ ...state, bounds }), { preventScrollReset: true });
+    },
+    [navigate, state],
+  );
+
+  /**
+   * 지도를 민 자리를 주소에 적어 둔다 (U6).
+   *
+   * 조회 조건이 아니므로 히스토리를 쌓지 않고 `replace` 로 덮어쓴다 — 뒤로가기가
+   * 지도 이동을 한 걸음씩 되감는 대신 상세 이전의 탐색 화면으로 돌아가게 둔다.
+   */
+  const rememberViewport = useCallback(
+    (viewport: MapViewport) => {
+      navigate(exploreHref({ ...state, viewport }), {
+        replace: true,
+        preventScrollReset: true,
+      });
     },
     [navigate, state],
   );
@@ -192,8 +219,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <MapView
             appKey={kakaoAppKey}
             places={data?.places ?? []}
+            initialViewport={state.viewport}
+            initialBounds={state.bounds}
             onLoadStateChange={setMapLoad}
             onSearchThisArea={searchThisArea}
+            onViewportChange={rememberViewport}
           />
         ) : null}
         <TopBar state={state} regionLabel={regionLabel} onOpenSheet={openSheet} />

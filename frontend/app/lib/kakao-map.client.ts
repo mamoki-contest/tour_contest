@@ -48,7 +48,9 @@ export interface KakaoMap {
     paddingLeft?: number,
   ): void;
   setCenter(latlng: KakaoLatLng): void;
+  getCenter(): KakaoLatLng;
   getLevel(): number;
+  setLevel(level: number): void;
   relayout(): void;
 }
 
