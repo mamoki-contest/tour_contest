@@ -22,6 +22,7 @@ import { InterestSourceNote, SortToggle } from "../components/sort-toggle";
 import { EmptyState, ErrorState, SecondaryButton } from "../components/states";
 import {
   exploreHref,
+  hasDroppedDate,
   parseExploreState,
   type ExploreState,
   type MapBounds,
@@ -44,10 +45,11 @@ export function meta({}: Route.MetaArgs) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   // 조회 조건은 로더가 읽는다. 화면 상태(시트 스냅)는 컴포넌트가 URL에서 직접 읽는다.
-  const state = parseExploreState(new URL(request.url).searchParams);
+  const params = new URL(request.url).searchParams;
+  const state = parseExploreState(params);
 
   // 두 조회는 서로를 기다릴 이유가 없다 — 지역 방문 규모가 늦다고 목록이 늦지 않게 한다.
-  const [result, regions] = await Promise.all([
+  const [listResult, regions] = await Promise.all([
     fetchPlaceList(request.signal, state),
     fetchRegionVisitScale(request.signal),
   ]);
@@ -56,6 +58,28 @@ export async function loader({ request }: Route.LoaderArgs) {
     console.error(`[regions] ${regions.failure.dataName} 조회 실패: ${regions.failure.cause}`);
   }
   const regionData = regions.ok ? regions.data : null;
+
+  /*
+   * 강원에 없는 시·군 코드는 백엔드가 400으로 거절해 목록을 통째로 잃게 만든다.
+   * 코드의 권위 있는 목록은 방금 함께 받은 지역 방문 규모가 쥐고 있으므로, 거기에
+   * 없는 코드였다면 **그 조건만 버리고** 다시 부른다. 정상 경로는 이 자리에 오지
+   * 않으니 조회가 늘지 않는다.
+   */
+  const unknownRegion =
+    state.regionCode !== null &&
+    regionData !== null &&
+    !regionData.regions.some((region) => region.sigunguCode === state.regionCode);
+
+  let result = listResult;
+  let droppedRegion = false;
+  if (!result.ok && unknownRegion) {
+    console.error(`[places] 알 수 없는 시·군 코드 ${state.regionCode}, 강원 전체로 다시 조회합니다.`);
+    result = await fetchPlaceList(request.signal, { ...state, regionCode: null });
+    droppedRegion = result.ok;
+  }
+
+  // 버린 조건은 화면이 말한다. 조용히 무시하면 사용자는 다른 조건의 결과를 읽게 된다.
+  const dropped = { date: hasDroppedDate(params), region: droppedRegion };
 
   // 지도 SDK는 브라우저가 직접 불러야 하므로 이 키는 클라이언트로 내려간다.
   // 관광 API 키와 달리 숨길 수 있는 값이 아니고, 도메인 등록이 보호 장치다.
@@ -67,12 +91,13 @@ export async function loader({ request }: Route.LoaderArgs) {
     return {
       data: null,
       regions: regionData,
+      dropped,
       kakaoAppKey,
       error: { dataName: result.failure.dataName },
     };
   }
 
-  return { data: result.data, regions: regionData, kakaoAppKey, error: null };
+  return { data: result.data, regions: regionData, dropped, kakaoAppKey, error: null };
 }
 
 /** 시트를 끌어올린 것만으로 목록을 다시 부르지 않는다 — 스냅은 화면 상태지 조회 조건이 아니다. */
@@ -92,7 +117,7 @@ export function shouldRevalidate({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { data, regions, kakaoAppKey, error } = loaderData;
+  const { data, regions, dropped, kakaoAppKey, error } = loaderData;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -187,7 +212,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             />
           )
         }
-        header={<SheetHeader state={state} data={data} />}
+        header={<SheetHeader state={state} data={data} dropped={dropped} />}
       >
         {loading ? (
           <PlaceList>
@@ -298,9 +323,11 @@ function TopBar({
 function SheetHeader({
   state,
   data,
+  dropped,
 }: {
   state: ExploreState;
   data: Route.ComponentProps["loaderData"]["data"];
+  dropped: Route.ComponentProps["loaderData"]["dropped"];
 }) {
   // 조회 범위의 전체 개수와 지금 화면에 온 개수는 다르다. 첫 쪽만 받아 놓고
   // 전체 개수를 `이만큼 보여준다`로 읽히게 두지 않는다.
@@ -333,7 +360,32 @@ function SheetHeader({
         같은 목록 모양으로 오기 때문에, 어느 쪽인지 문장으로 반드시 밝힌다.
       */}
       {data?.search ? <SearchNotice search={data.search} /> : null}
+
+      <DroppedConditionNotice dropped={dropped} />
     </div>
+  );
+}
+
+/**
+ * 쓸 수 없어 버린 조건을 한 줄로 알린다.
+ *
+ * 어긋난 조건 하나 때문에 목록 전체를 잃는 대신 그 조건만 버렸다. 대신 무엇이
+ * 빠졌는지는 반드시 말한다 — 말하지 않으면 사용자는 자기가 건 조건의 결과를
+ * 보고 있다고 믿는다.
+ */
+function DroppedConditionNotice({
+  dropped,
+}: {
+  dropped: Route.ComponentProps["loaderData"]["dropped"];
+}) {
+  if (!dropped.date && !dropped.region) return null;
+
+  return (
+    <p className="type-body-md mt-2 rounded-lg bg-grey-100 p-3 text-grey-700">
+      {dropped.date
+        ? "고른 날짜가 예측이 닿는 30일 밖이라 날짜 조건을 풀었어요."
+        : "그 시·군을 찾을 수 없어 강원 전체로 보여드려요."}
+    </p>
   );
 }
 
