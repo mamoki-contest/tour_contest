@@ -1,3 +1,5 @@
+import { isWithinForecastWindow } from "./forecast-window";
+
 /**
  * 탐색 상태는 URL 쿼리에 산다 (WIREFRAME U6, 심각도 4).
  *
@@ -78,6 +80,20 @@ function isCalendarDate(raw: string | null): raw is string {
 }
 
 /**
+ * 예측이 닿는 날인지까지 본다.
+ *
+ * 형식만 보면 지난 날짜가 그대로 백엔드로 간다. 백엔드는 과거 날짜를 400으로
+ * 거절하므로 **목록 전체를 잃는다** — 어긋난 조건 하나 때문에 화면이 통째로 죽고,
+ * `다시 시도`는 같은 조건으로 다시 부르니 벗어날 길도 없다.
+ *
+ * 날짜 시트가 창 밖을 고르지 못하게 막고 있어도 이 검사가 필요하다. 날짜가 걸린
+ * 링크는 **공유되고 북마크된다** — 25일을 고른 링크를 26일에 열면 그 날짜는 과거다.
+ */
+function isUsableDate(raw: string | null, now: Date): raw is string {
+  return isCalendarDate(raw) && isWithinForecastWindow(raw, now);
+}
+
+/**
  * 쿼리에서 탐색 상태를 읽는다.
  *
  * 로더와 컴포넌트가 **같은 함수로 같은 URL을 읽는다.** 컴포넌트가 로더 데이터의
@@ -100,12 +116,22 @@ export function formatBounds(bounds: MapBounds): string {
     .join(",");
 }
 
-export function parseExploreState(params: URLSearchParams): ExploreState {
+export function parseExploreState(params: URLSearchParams, now: Date = new Date()): ExploreState {
   const sortRaw = params.get("sort");
   const snapRaw = params.get("snap");
   const sheetRaw = params.get("sheet");
-  const dateMode: DateMode = params.get("dateMode") === "FIXED" ? "FIXED" : "FLEXIBLE";
-  const date = text(params, "date");
+  const requestedMode: DateMode = params.get("dateMode") === "FIXED" ? "FIXED" : "FLEXIBLE";
+  const rawDate = text(params, "date");
+
+  // 유연 모드에 남은 날짜는 무시한다 — 두 모드가 같은 화면에서 섞이지 않게 한다.
+  const date = requestedMode === "FIXED" && isUsableDate(rawDate, now) ? rawDate : null;
+
+  /*
+   * 쓸 수 없는 날짜를 버릴 때 모드도 함께 되돌린다. 모드만 `FIXED` 로 남으면 카드가
+   * 있지도 않은 선택일 수준을 찾다가 전부 `예측 정보 없음` 이 된다 — 날짜를 고르지
+   * 않은 것과 예측이 없는 것은 다른 말이다.
+   */
+  const dateMode: DateMode = requestedMode === "FIXED" && date === null ? "FLEXIBLE" : requestedMode;
 
   return {
     regionCode: text(params, "region"),
@@ -113,8 +139,7 @@ export function parseExploreState(params: URLSearchParams): ExploreState {
     theme: text(params, "theme"),
     query: text(params, "q"),
     dateMode,
-    // 유연 모드에 남은 날짜는 무시한다 — 두 모드가 같은 화면에서 섞이지 않게 한다.
-    date: dateMode === "FIXED" && isCalendarDate(date) ? date : null,
+    date,
     sort: SORTS.includes(sortRaw as SortOrder) ? (sortRaw as SortOrder) : DEFAULT_EXPLORE_STATE.sort,
     snap: SNAPS.includes(snapRaw as SheetSnap) ? (snapRaw as SheetSnap) : DEFAULT_EXPLORE_STATE.snap,
     sheet: SHEETS.includes(sheetRaw as OpenSheet) ? (sheetRaw as OpenSheet) : null,
@@ -151,4 +176,15 @@ export function hasActiveConditions(state: ExploreState): boolean {
     state.dateMode !== DEFAULT_EXPLORE_STATE.dateMode ||
     state.sort !== DEFAULT_EXPLORE_STATE.sort
   );
+}
+
+/**
+ * URL이 날짜를 요청했지만 예측이 닿지 않아 버렸는지.
+ *
+ * 버렸다는 사실을 화면이 말해야 한다 — 고른 날짜가 조용히 사라지면 사용자는
+ * 자기가 무엇으로 보고 있는지 모른 채 다른 조건의 결과를 읽는다.
+ */
+export function hasDroppedDate(params: URLSearchParams, now: Date = new Date()): boolean {
+  const raw = text(params, "date");
+  return params.get("dateMode") === "FIXED" && raw !== null && !isUsableDate(raw, now);
 }
