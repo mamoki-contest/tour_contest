@@ -7,11 +7,11 @@ import { ForecastGrid } from "../components/forecast-grid";
 import { RelatedPlaceCard } from "../components/place-card";
 import { useCollection } from "../lib/use-collection";
 import { CurrentAccessSection } from "../components/road-status";
-import { EmptyState, ErrorState, SecondaryButton } from "../components/states";
+import { DataNote, EmptyState, ErrorState, SecondaryButton } from "../components/states";
 import { backHref, shouldUseHistoryBack } from "../lib/back-link";
 import { parseExploreState } from "../lib/explore-params";
 import { fetchPlaceDetail } from "../lib/place-detail.server";
-import { formatSourceCaption } from "../lib/format";
+import { formatStatusCaption } from "../lib/data-status";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData?.detail?.name ?? "관광지"} — 한사나다` }];
@@ -48,7 +48,7 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
           {error?.notFound ? (
             // 없는 곳에 `다시 시도` 를 주지 않는다 — 몇 번을 눌러도 같은 자리다.
             <EmptyState
-              message="이 관광지를 찾을 수 없어요. 주소가 잘못됐거나 공급자 목록에서 빠진 곳이에요."
+              message="이 관광지를 찾을 수 없어요. 주소가 잘못됐거나 목록에서 빠진 곳이에요."
               action={<HomeLink />}
             />
           ) : (
@@ -78,8 +78,9 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <main className="mx-auto min-h-dvh max-w-[1024px] px-gutter pb-32">
-      <div className="sticky top-0 z-10 -mx-gutter bg-grey-50/95 px-gutter py-3 backdrop-blur">
+      <div className="sticky top-0 z-10 -mx-gutter flex items-center justify-between gap-4 bg-grey-50/95 px-gutter py-3 backdrop-blur">
         <BackLink />
+        <HelpLink />
       </div>
 
       {detail.photoUrl ? (
@@ -98,9 +99,11 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
       {detail.description ? (
         <p className="type-body-lg mt-4 text-grey-700">{detail.description}</p>
       ) : null}
-      <p className="type-caption mt-2 text-grey-600">
-        {formatSourceCaption(detail.source, detail.observedAt)}
-      </p>
+      {/*
+        캡션은 기준 시점 한 줄뿐이다 (#35). 값이 낡았으면(`STALE`) 그 사실이 먼저 온다 —
+        최종 정상 데이터를 방금 받은 값처럼 읽게 두지 않는다 (#21).
+      */}
+      <DataNote>{formatStatusCaption(detail.status, detail.observedAt)}</DataNote>
 
       {/*
         섹션 사이 48px. 붙이면 네 신호가 하나의 종합 평가처럼 읽힌다 (U20, ADR-0002).
@@ -116,7 +119,7 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
 
       <RelatedSection
         title="대신 가볼 만한 곳"
-        description="이 장소 대신 갈 만한 관광지예요. 한산할 것으로 보이는 날을 확인한 곳만 담았어요."
+        description="한산할 것으로 보이는 날을 확인한 곳만 담았어요."
         group={detail.alternatives}
         noDataMessage="이 관광지의 연관 장소 정보를 얻지 못했어요."
         noneQualifiedMessage="연관 장소는 확인했지만, 예측을 가진 대체지 후보가 없었어요."
@@ -124,7 +127,7 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
 
       <RelatedSection
         title="함께 가기 좋은 곳"
-        description="같은 여행에서 함께 들르기 좋은 음식점·숙박시설이에요. 대체지가 아니에요."
+        description="같은 여행에서 함께 들르기 좋은 음식점·숙박시설이에요."
         group={detail.companions}
         noDataMessage="이 관광지의 연관 장소 정보를 얻지 못했어요."
         noneQualifiedMessage="연관 장소 중 음식점·숙박시설은 없었어요."
@@ -200,6 +203,15 @@ function BackLink() {
   );
 }
 
+/** 신호가 무엇을 세는 값인지는 도움말 한 자리에 모았다 (#35). */
+function HelpLink() {
+  return (
+    <Link to="/?sheet=help" className="type-label-md text-primary-strong">
+      ⓘ 이 화면의 정보들
+    </Link>
+  );
+}
+
 function HomeLink() {
   return (
     <Link
@@ -264,9 +276,7 @@ function RelatedSection({
               </li>
             ))}
           </ul>
-          <p className="type-caption mt-4 text-grey-600">
-            {formatSourceCaption(group.source, group.observedAt)}
-          </p>
+          <DataNote>{formatStatusCaption(null, group.observedAt)}</DataNote>
         </>
       )}
     </Section>

@@ -1,6 +1,6 @@
 import type { CrowdForecast, CrowdLevel } from "../lib/contract";
 import type { DateMode } from "../lib/explore-params";
-import { formatSourceCaption } from "../lib/format";
+import { formatStatusCaption } from "../lib/data-status";
 import { dayOfMonth, monthKey, monthLabel } from "../lib/forecast-window";
 import { NoDataBadge } from "./badges";
 import { CrowdBadge, QuietDateValue } from "./crowd-badge";
@@ -120,16 +120,15 @@ function LegendSwatch({ level }: { level: CrowdLevel }) {
   );
 }
 
+/**
+ * 예측 격자의 캡션.
+ *
+ * 기준 시점 한 줄만 남는다 (#35). `이 장소 자체의 30일을 견준 값`이라는 설명은
+ * 화면마다 되풀이하는 대신 도움말 한 자리로 옮겼다. 값이 낡았으면(`STALE`) 그 사실이
+ * 시점보다 먼저 온다 (#21) — 낡은 예측을 오늘 받은 예측처럼 읽으면 헛걸음이 된다.
+ */
 function ForecastCaption({ forecast }: { forecast: CrowdForecast }) {
-  return (
-    <>
-      {/* 기준 시점은 ISO 원문이 아니라 읽을 수 있는 날짜로 — 캡션은 사용자가 읽는 줄이다. */}
-      <p className="type-caption mt-4 text-grey-600">
-        {formatSourceCaption(forecast.source, forecast.observedAt)}
-      </p>
-      <p className="type-caption text-grey-600">
-        이 장소 자체의 30일을 견준 값이에요. 다른 관광지와 비교하는 값이 아니에요.
-      </p>
-    </>
-  );
+  const caption = formatStatusCaption(forecast.status, forecast.observedAt);
+  if (!caption) return null;
+  return <p className="type-caption mt-4 text-grey-600">{caption}</p>;
 }
