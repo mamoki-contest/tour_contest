@@ -52,9 +52,9 @@ function toPlaces(items: BackendAttraction[] | null | undefined): Place[] {
     : [];
 }
 
-/** 정렬 방향을 백엔드 이름으로 옮긴다. 화면은 `인기 많은 순`, 백엔드는 온라인 언급량이다. */
+/** 정렬 방향을 백엔드 이름으로 옮긴다. */
 function toBackendSort(sort: ExploreState["sort"]): string {
-  return sort === "INTEREST_ASC" ? "ONLINE_MENTION_ASC" : "ONLINE_MENTION_DESC";
+  return sort === "MENTION_ASC" ? "ONLINE_MENTION_ASC" : "ONLINE_MENTION_DESC";
 }
 
 /** 탐색 조건을 목록 질의로 옮긴다. 시트 스냅 같은 화면 상태는 보내지 않는다. */
