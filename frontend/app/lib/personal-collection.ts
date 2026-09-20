@@ -38,9 +38,18 @@ export interface CollectionSnapshot {
    * **손상된 데이터가 화면 전체를 중단시키지 않는다** (슬라이스 #9 AC).
    */
   droppedCount: number;
+  /**
+   * 저장값을 **통째로** 읽지 못했는지 (#28).
+   *
+   * 일부 항목이 상한 것과 다르다. 일부라면 나머지가 남아 화면이 설 수 있지만,
+   * 통째로 상하면 남는 것이 없어 `아직 저장한 곳이 없어요`와 `불러오지 못했어요`가
+   * 동시에 뜬다 — 서로 어긋나는 두 문장이고, 사용자가 되돌릴 방법도 없다.
+   * 그 두 경우를 여기서 갈라 화면이 복구 버튼을 줄 수 있게 한다.
+   */
+  corrupted: boolean;
 }
 
-const EMPTY: CollectionSnapshot = { places: [], droppedCount: 0 };
+const EMPTY: CollectionSnapshot = { places: [], droppedCount: 0, corrupted: false };
 
 function storage(): Storage | null {
   // 서버 렌더 중이거나 저장소가 막힌 브라우저(사생활 보호 모드 등)에서는 조용히 비운다.
@@ -93,11 +102,11 @@ export function readCollection(): CollectionSnapshot {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // 통째로 깨졌다. 지우지 않고 남겨 둔다 — 사용자가 복구를 원할 수 있다.
-    return { places: [], droppedCount: 1 };
+    // 통째로 깨졌다. 스스로 지우지 않는다 — 지우는 것은 사용자가 확인하고 고를 일이다.
+    return { places: [], droppedCount: 1, corrupted: true };
   }
 
-  if (!Array.isArray(parsed)) return { places: [], droppedCount: 1 };
+  if (!Array.isArray(parsed)) return { places: [], droppedCount: 1, corrupted: true };
 
   const places: SavedPlace[] = [];
   let droppedCount = 0;
@@ -107,7 +116,23 @@ export function readCollection(): CollectionSnapshot {
     else droppedCount += 1;
   }
 
-  return { places, droppedCount };
+  return { places, droppedCount, corrupted: false };
+}
+
+/**
+ * 읽을 수 없게 된 저장값을 지우고 빈 컬렉션에서 다시 시작한다 (#28).
+ *
+ * 화면이 확인을 받은 뒤에만 부른다. 이 함수는 되돌릴 수 없으므로 스스로 판단해
+ * 부르는 자리를 만들지 않는다 — 읽지 못한다는 것과 버려도 된다는 것은 다른 말이다.
+ */
+export function clearCollection(): CollectionSnapshot {
+  const store = storage();
+  try {
+    store?.removeItem(STORAGE_KEY);
+  } catch {
+    // 지우지 못해도 화면은 빈 상태로 선다. 다음 읽기에서 같은 안내를 다시 만난다.
+  }
+  return EMPTY;
 }
 
 function write(places: SavedPlace[]): void {
@@ -149,12 +174,12 @@ export function savePlace(
     : [next, ...snapshot.places];
 
   write(places);
-  return { places, droppedCount: snapshot.droppedCount };
+  return { places, droppedCount: snapshot.droppedCount, corrupted: false };
 }
 
 export function removePlace(placeId: string): CollectionSnapshot {
   const snapshot = readCollection();
   const places = snapshot.places.filter((place) => place.placeId !== placeId);
   write(places);
-  return { places, droppedCount: snapshot.droppedCount };
+  return { places, droppedCount: snapshot.droppedCount, corrupted: snapshot.corrupted };
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  clearCollection,
   readCollection,
   removePlace,
   savePlace,
@@ -8,7 +9,7 @@ import {
   type SavedPlace,
 } from "./personal-collection";
 
-const EMPTY: CollectionSnapshot = { places: [], droppedCount: 0 };
+const EMPTY: CollectionSnapshot = { places: [], droppedCount: 0, corrupted: false };
 
 /** 같은 탭 안의 다른 컴포넌트들에게 저장이 바뀌었음을 알린다. */
 const CHANGED_EVENT = "hansanada:collection-changed";
@@ -52,6 +53,12 @@ export function useCollection() {
     window.dispatchEvent(new Event(CHANGED_EVENT));
   }, []);
 
+  /** 읽을 수 없게 된 저장값을 지우고 다시 시작한다 (#28). 화면이 확인을 받은 뒤에만 부른다. */
+  const clear = useCallback(() => {
+    setSnapshot(clearCollection());
+    window.dispatchEvent(new Event(CHANGED_EVENT));
+  }, []);
+
   const isSaved = useCallback(
     (placeId: string) => snapshot.places.some((place) => place.placeId === placeId),
     [snapshot],
@@ -63,5 +70,5 @@ export function useCollection() {
     [snapshot],
   );
 
-  return { snapshot, loaded, save, remove, isSaved, find, refresh };
+  return { snapshot, loaded, save, remove, clear, isSaved, find, refresh };
 }
