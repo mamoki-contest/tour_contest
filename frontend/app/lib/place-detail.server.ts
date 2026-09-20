@@ -335,6 +335,17 @@ function toDetail(raw: unknown): PlaceDetail | null {
   };
 }
 
+/**
+ * 없는 관광지인지, 부르지 못한 것인지.
+ *
+ * 백엔드는 없는 식별자에만 404(`404-1`)를 준다. 시간 초과·연결 실패는 응답을 받기
+ * 전이라 상태 자체가 없고, 500 대는 다시 부르면 달라질 수 있다 — **재시도가
+ * 무의미한 경우만** 참이다.
+ */
+export function isNotFound(status: number | undefined): boolean {
+  return status === 404;
+}
+
 export async function fetchPlaceDetail(
   placeId: string,
   signal?: AbortSignal,
@@ -346,10 +357,20 @@ export async function fetchPlaceDetail(
     signal,
   );
 
-  if (!result.ok) return { ok: false, failure: result.failure };
+  if (!result.ok) {
+    return { ok: false, failure: { ...result.failure, notFound: isNotFound(result.failure.status) } };
+  }
 
   const detail = toDetail(result.data);
   return detail
     ? { ok: true, data: detail }
-    : { ok: false, failure: { dataName: DETAIL_DATA_NAME, cause: "응답이 계약을 벗어났습니다." } };
+    : {
+        ok: false,
+        failure: {
+          dataName: DETAIL_DATA_NAME,
+          cause: "응답이 계약을 벗어났습니다.",
+          // 계약을 벗어난 응답은 없는 곳이 아니라 고장이다. 다시 불러 볼 값이 있다.
+          notFound: false,
+        },
+      };
 }

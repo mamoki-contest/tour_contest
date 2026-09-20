@@ -285,9 +285,21 @@ export interface PlaceDetail extends Omit<Place, "forecast"> {
   observedAt: string | null;
 }
 
+/**
+ * 상세 조회 실패.
+ *
+ * 목록과 달리 **없는 곳과 부르지 못한 곳을 가른다.** 없는 곳에 `다시 시도` 를 주면
+ * 몇 번을 눌러도 같은 자리고, 부르지 못한 곳을 없는 곳처럼 말하면 돌아올 값을
+ * 사라졌다고 하는 셈이다.
+ */
+export interface PlaceDetailFailure extends PlaceListFailure {
+  /** 공급자에 그 식별자가 없다. 재시도로 달라지지 않는다. */
+  notFound: boolean;
+}
+
 export type PlaceDetailResult =
   | { ok: true; data: PlaceDetail }
-  | { ok: false; failure: PlaceListFailure };
+  | { ok: false; failure: PlaceDetailFailure };
 
 /* ─────────────────────────  검색 (슬라이스 #5)  ───────────────────────── */
 

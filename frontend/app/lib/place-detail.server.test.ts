@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toParking } from "./place-detail.server";
+import { isNotFound, toParking } from "./place-detail.server";
 
 /**
  * 입력은 로컬 백엔드(`/api/v1/attractions/…`)의 실제 응답 모양을 줄인 것이다 —
@@ -150,5 +150,20 @@ describe("toParking", () => {
 
   it("갱신에 실패한 실시간 값은 STALE 로 남는다 — 방금 받은 값처럼 말하지 않는다", () => {
     expect(toParking({ status: "AVAILABLE", dataStatus: "STALE", lots: [] }).status).toBe("STALE");
+  });
+});
+
+describe("isNotFound", () => {
+  it("없는 식별자만 참이다", () => {
+    expect(isNotFound(404)).toBe(true);
+  });
+
+  it("백엔드 고장은 다시 불러 볼 값이 있다", () => {
+    expect(isNotFound(500)).toBe(false);
+    expect(isNotFound(503)).toBe(false);
+  });
+
+  it("응답을 받기 전에 끊긴 경우도 없는 곳이 아니다", () => {
+    expect(isNotFound(undefined)).toBe(false);
   });
 });
