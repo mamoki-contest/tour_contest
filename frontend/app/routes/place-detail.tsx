@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import type { Route } from "./+types/place-detail";
 import type { RelatedPlacesGroup } from "../lib/contract";
@@ -8,6 +8,7 @@ import { RelatedPlaceCard } from "../components/place-card";
 import { useCollection } from "../lib/use-collection";
 import { CurrentAccessSection } from "../components/road-status";
 import { EmptyState, ErrorState } from "../components/states";
+import { backHref, shouldUseHistoryBack } from "../lib/back-link";
 import { parseExploreState } from "../lib/explore-params";
 import { fetchPlaceDetail } from "../lib/place-detail.server";
 import { formatSourceCaption } from "../lib/format";
@@ -57,12 +58,7 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
     <>
       <main className="mx-auto min-h-dvh max-w-[1024px] px-gutter pb-32">
       <div className="sticky top-0 z-10 -mx-gutter bg-grey-50/95 px-gutter py-3 backdrop-blur">
-        <Link
-          to={-1 as unknown as string}
-          className="type-label-md inline-flex h-10 items-center rounded-sm text-grey-700"
-        >
-          ← 뒤로
-        </Link>
+        <BackLink />
       </div>
 
       {detail.photoUrl ? (
@@ -148,6 +144,38 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
 
       <BottomNav savedCount={collection.snapshot.places.length} />
     </>
+  );
+}
+
+/**
+ * `← 뒤로` 비상구 (U9 · H3).
+ *
+ * href 와 클릭이 **다른 일을 한다.** href 는 언제나 앱 안의 실제 주소(탐색 홈 +
+ * 탐색 조건)라 새 탭·가운데 클릭·링크 복사·JS 없는 첫 페인트가 전부 갈 곳이 있고,
+ * 앱 안에서 들어온 경우에만 클릭이 히스토리 한 겹을 되돌린다. 링크로 곧장 들어온
+ * 첫 진입은 뒤로가기를 부르지 않는다 — 그러면 사이트 밖으로 나간다.
+ */
+function BackLink() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  return (
+    <Link
+      to={backHref(location.search)}
+      onClick={(event) => {
+        // 새 탭·새 창으로 여는 수식 클릭은 브라우저에게 맡긴다.
+        if (event.defaultPrevented) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        // 클릭 시점의 히스토리를 본다 — 렌더 중에 읽으면 서버에는 없는 값이다.
+        if (!shouldUseHistoryBack(window.history.state)) return;
+
+        event.preventDefault();
+        navigate(-1);
+      }}
+      className="type-label-md inline-flex h-10 items-center rounded-sm text-grey-700"
+    >
+      ← 뒤로
+    </Link>
   );
 }
 
