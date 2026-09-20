@@ -24,8 +24,21 @@ export interface KakaoLatLngBounds {
   extend(latlng: KakaoLatLng): void;
 }
 
+/** 지도 컨테이너 안의 픽셀 좌표 — 시트가 가리는 만큼을 잘라낼 때 쓴다. */
+export interface KakaoPoint {
+  x: number;
+  y: number;
+}
+
 export interface KakaoMap {
   getBounds(): KakaoLatLngBounds;
+  /**
+   * 컨테이너 픽셀 좌표를 위·경도로 되돌린다.
+   *
+   * `getBounds()` 는 컨테이너 전체를 말하므로 바텀시트가 덮은 아래쪽까지 포함한다.
+   * 사용자가 실제로 본 범위만 조회하려면 이 변환이 필요하다.
+   */
+  containerPointToLatLng(point: KakaoPoint): KakaoLatLng;
   /** 여백을 주면 그만큼 비워 두고 맞춘다 — 시트에 가리는 아래쪽을 피하는 데 쓴다. */
   setBounds(
     bounds: KakaoLatLngBounds,
@@ -43,11 +56,12 @@ export interface KakaoMarker {
   setMap(map: KakaoMap | null): void;
 }
 
-interface KakaoMapsApi {
+export interface KakaoMapsApi {
   load(callback: () => void): void;
   Map: new (container: HTMLElement, options: { center: KakaoLatLng; level: number }) => KakaoMap;
   LatLng: new (lat: number, lng: number) => KakaoLatLng;
   LatLngBounds: new () => KakaoLatLngBounds;
+  Point: new (x: number, y: number) => KakaoPoint;
   Marker: new (options: { position: KakaoLatLng; title?: string }) => KakaoMarker;
   event: {
     addListener(target: KakaoMap, type: string, handler: () => void): void;
