@@ -1,5 +1,6 @@
 import type { CrowdForecast, CrowdLevel } from "../lib/contract";
 import type { DateMode } from "../lib/explore-params";
+import { formatSourceCaption } from "../lib/format";
 import { dayOfMonth, monthKey, monthLabel } from "../lib/forecast-window";
 import { NoDataBadge } from "./badges";
 import { CrowdBadge, QuietDateValue } from "./crowd-badge";
@@ -122,8 +123,9 @@ function LegendSwatch({ level }: { level: CrowdLevel }) {
 function ForecastCaption({ forecast }: { forecast: CrowdForecast }) {
   return (
     <>
+      {/* 기준 시점은 ISO 원문이 아니라 읽을 수 있는 날짜로 — 캡션은 사용자가 읽는 줄이다. */}
       <p className="type-caption mt-4 text-grey-600">
-        {[forecast.source ?? "출처 없음", forecast.observedAt ?? "기준 시점 없음"].join(" · ")}
+        {formatSourceCaption(forecast.source, forecast.observedAt)}
       </p>
       <p className="type-caption text-grey-600">
         이 장소 자체의 30일을 견준 값이에요. 다른 관광지와 비교하는 값이 아니에요.
