@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Place } from "../lib/contract";
 import type { MapBounds, MapViewport } from "../lib/explore-params";
-import { boundsFromCorners, sheetCoverHeight, visibleContainerRect } from "../lib/map-viewport";
+import {
+  boundsFromCorners,
+  boundsOfPoints,
+  sheetCoverHeight,
+  visibleContainerRect,
+} from "../lib/map-viewport";
 import {
   loadKakaoMaps,
   type KakaoMap,
@@ -17,6 +22,15 @@ const GANGWON_LEVEL = 12;
 
 /** 경계를 맞출 때 가장자리에 두는 여백(px). 아래쪽만 시트가 덮는 만큼 따로 잡는다. */
 const EDGE_PADDING = 16;
+
+/**
+ * 프로그램이 지도를 옮긴 뒤 이벤트가 잦아들 때까지 무시할 시간(ms).
+ *
+ * 카카오맵은 `setBounds`·`setLevel` 에도 `zoom_changed` 를 쏜다. 걸러내지 않으면
+ * 시·군을 골라 지도가 이동한 것을 `사용자가 움직였다` 로 읽어 `이 지도 영역에서
+ * 검색` 버튼이 저절로 뜨고, 주소에 옮겨 간 자리가 적힌다.
+ */
+const PROGRAMMATIC_QUIET_MS = 400;
 
 
 function isDesktopViewport(): boolean {
@@ -55,6 +69,7 @@ export type MapLoadState = "LOADING" | "READY" | "FAILED";
 export function MapView({
   appKey,
   places,
+  regionCode,
   initialViewport,
   initialBounds,
   onLoadStateChange,
@@ -63,6 +78,11 @@ export function MapView({
 }: {
   appKey: string;
   places: Place[];
+  /**
+   * 지금 목록에 **적용된** 시·군 코드. URL의 값이 아니라 로더가 실제로 조회한 값이다 —
+   * 조회가 끝나기 전에 옮기면 이전 시·군의 마커로 지도를 맞추게 된다.
+   */
+  regionCode: string | null;
   /** 주소에 실려 온 지도 위치. 있으면 첫 맞춤이 이 값을 쓴다 (U6). */
   initialViewport: MapViewport | null;
   /** 주소에 실려 온 조회 경계. 위치가 없을 때의 차선책 — 조회 범위와 화면을 맞춘다. */
@@ -80,6 +100,9 @@ export function MapView({
   /** 지도를 움직인 뒤에만 검색 버튼이 나타난다. */
   const [moved, setMoved] = useState(false);
 
+  /** 프로그램이 옮기는 중. 그동안의 지도 이벤트는 사용자의 몸짓이 아니다. */
+  const programmaticRef = useRef(0);
+
   /** 콜백이 매 렌더 새로 오더라도 지도를 다시 만들지 않게 최신 값만 붙잡아 둔다. */
   const viewportChangeRef = useRef(onViewportChange);
   viewportChangeRef.current = onViewportChange;
@@ -88,7 +111,30 @@ export function MapView({
    * 첫 렌더의 주소 상태. 지도 생성 효과는 `appKey` 에만 매달려 있으므로, 그 뒤에
    * 바뀐 값이 아니라 **마운트 시점의 값**으로 첫 화면을 맞춰야 한다.
    */
-  const initialRef = useRef({ viewport: initialViewport, bounds: initialBounds });
+  const initialRef = useRef({
+    viewport: initialViewport,
+    bounds: initialBounds,
+    regionCode,
+  });
+
+  /**
+   * 이미 지도를 맞춘 시·군. `undefined` 는 아직 한 번도 맞추지 않았다는 뜻이다.
+   *
+   * 주소가 지도 위치를 들고 왔다면(상세에서 뒤로 온 경우) 그 위치가 이긴다 — 사용자가
+   * 직접 옮겨 둔 화면을 시·군 기준으로 다시 잡아채지 않는다.
+   */
+  const fittedRegionRef = useRef<string | null | undefined>(
+    initialRef.current.viewport ? initialRef.current.regionCode : undefined,
+  );
+
+  /** 지도를 프로그램으로 옮긴다 — 그 사이에 오는 이벤트는 사용자의 것이 아니다. */
+  const moveProgrammatically = useCallback((move: () => void) => {
+    programmaticRef.current += 1;
+    move();
+    window.setTimeout(() => {
+      programmaticRef.current = Math.max(0, programmaticRef.current - 1);
+    }, PROGRAMMATIC_QUIET_MS);
+  }, []);
 
   useEffect(() => {
     onLoadStateChange(loadState);
@@ -133,6 +179,7 @@ export function MapView({
         }
 
         const onUserMove = () => {
+          if (programmaticRef.current > 0) return;
           setMoved(true);
           const center = map.getCenter();
           viewportChangeRef.current({
@@ -182,6 +229,48 @@ export function MapView({
       markersRef.current = [];
     };
   }, [places, loadState]);
+
+  /**
+   * 시·군을 새로 고르면 지도가 그리로 간다.
+   *
+   * 목록만 바뀌고 지도가 강원 전체에 머물면, 고른 시·군이 어디인지 지도에서 알 수 없다.
+   * 한 번 맞춘 시·군은 다시 맞추지 않는다 — 사용자가 그 뒤에 직접 옮긴 화면을
+   * 목록이 갱신될 때마다 되돌리지 않기 위해서다.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    const maps = typeof window !== "undefined" ? window.kakao?.maps : undefined;
+    if (!map || !maps || loadState !== "READY") return;
+    if (fittedRegionRef.current === regionCode) return;
+
+    if (regionCode === null) {
+      // 강원 전체로 되돌린 것뿐이다 — 보던 자리를 빼앗지 않는다.
+      fittedRegionRef.current = null;
+      return;
+    }
+
+    const focus = boundsOfPoints(
+      places
+        .filter((place) => place.coordinates !== null)
+        .map((place) => ({
+          lat: place.coordinates!.latitude,
+          lng: place.coordinates!.longitude,
+        })),
+    );
+    // 좌표가 하나도 없으면 경계를 지어내지 않는다. 다음 갱신을 기다린다.
+    if (!focus) return;
+
+    moveProgrammatically(() => {
+      map.setBounds(
+        toKakaoBounds(maps, focus),
+        EDGE_PADDING,
+        EDGE_PADDING,
+        currentSheetCover(),
+        EDGE_PADDING,
+      );
+    });
+    fittedRegionRef.current = regionCode;
+  }, [places, regionCode, loadState, moveProgrammatically]);
 
   /**
    * 사용자가 실제로 본 범위.

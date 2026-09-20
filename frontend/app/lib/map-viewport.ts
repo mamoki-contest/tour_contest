@@ -26,6 +26,9 @@ export interface ContainerRect {
 /** 모바일에서 바텀시트가 지도 아래쪽을 덮는 비율 (중간 스냅 55%). */
 export const SHEET_COVER_RATIO = 0.55;
 
+/** 시·군을 하나의 마커로만 잡았을 때 지나치게 확대되지 않게 두는 최소 경계 폭(도). */
+export const MIN_FOCUS_SPAN_DEG = 0.02;
+
 /**
  * 시트가 지도 아래쪽을 덮는 높이(px).
  *
@@ -70,4 +73,46 @@ export function boundsFromCorners(a: LatLngLiteral, b: LatLngLiteral): MapBounds
     neLat: Math.max(a.lat, b.lat),
     neLng: Math.max(a.lng, b.lng),
   };
+}
+
+/** 경계가 최소 폭보다 좁으면 중심을 유지한 채 넓힌다. */
+export function expandToMinSpan(bounds: MapBounds, minSpan: number = MIN_FOCUS_SPAN_DEG): MapBounds {
+  const latPad = Math.max(0, minSpan - (bounds.neLat - bounds.swLat)) / 2;
+  const lngPad = Math.max(0, minSpan - (bounds.neLng - bounds.swLng)) / 2;
+  return {
+    swLat: bounds.swLat - latPad,
+    swLng: bounds.swLng - lngPad,
+    neLat: bounds.neLat + latPad,
+    neLng: bounds.neLng + lngPad,
+  };
+}
+
+/**
+ * 좌표 묶음을 감싸는 경계. 쓸 수 있는 좌표가 하나도 없으면 null —
+ * 경계를 지어내지 않는다(시·군을 골랐는데 마커가 없으면 지도는 그대로 둔다).
+ */
+export function boundsOfPoints(
+  points: readonly LatLngLiteral[],
+  minSpan: number = MIN_FOCUS_SPAN_DEG,
+): MapBounds | null {
+  const usable = points.filter(
+    (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng),
+  );
+  if (usable.length === 0) return null;
+
+  let bounds: MapBounds = {
+    swLat: usable[0].lat,
+    swLng: usable[0].lng,
+    neLat: usable[0].lat,
+    neLng: usable[0].lng,
+  };
+  for (const point of usable.slice(1)) {
+    bounds = {
+      swLat: Math.min(bounds.swLat, point.lat),
+      swLng: Math.min(bounds.swLng, point.lng),
+      neLat: Math.max(bounds.neLat, point.lat),
+      neLng: Math.max(bounds.neLng, point.lng),
+    };
+  }
+  return expandToMinSpan(bounds, minSpan);
 }

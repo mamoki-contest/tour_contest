@@ -82,6 +82,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   // 버린 조건은 화면이 말한다. 조용히 무시하면 사용자는 다른 조건의 결과를 읽게 된다.
   const dropped = { date: hasDroppedDate(params), region: droppedRegion };
 
+  /*
+   * 목록에 **실제로 적용된** 시·군. 지도가 시·군을 따라 움직일 때 URL의 값이 아니라
+   * 이 값을 봐야 한다 — 조회가 끝나기 전의 URL을 보면 아직 이전 시·군의 마커로
+   * 지도를 맞추게 되고, 그 뒤 새 마커가 와도 이미 맞췄다고 여겨 멈춘다.
+   */
+  const appliedRegion = droppedRegion ? null : state.regionCode;
+
   // 지도 SDK는 브라우저가 직접 불러야 하므로 이 키는 클라이언트로 내려간다.
   // 관광 API 키와 달리 숨길 수 있는 값이 아니고, 도메인 등록이 보호 장치다.
   const kakaoAppKey = process.env.KAKAO_MAP_APP_KEY ?? "";
@@ -93,12 +100,20 @@ export async function loader({ request }: Route.LoaderArgs) {
       data: null,
       regions: regionData,
       dropped,
+      appliedRegion,
       kakaoAppKey,
       error: { dataName: result.failure.dataName },
     };
   }
 
-  return { data: result.data, regions: regionData, dropped, kakaoAppKey, error: null };
+  return {
+    data: result.data,
+    regions: regionData,
+    dropped,
+    appliedRegion,
+    kakaoAppKey,
+    error: null,
+  };
 }
 
 /**
@@ -128,7 +143,7 @@ export function shouldRevalidate({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { data, regions, dropped, kakaoAppKey, error } = loaderData;
+  const { data, regions, dropped, appliedRegion, kakaoAppKey, error } = loaderData;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -219,6 +234,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <MapView
             appKey={kakaoAppKey}
             places={data?.places ?? []}
+            regionCode={appliedRegion}
             initialViewport={state.viewport}
             initialBounds={state.bounds}
             onLoadStateChange={setMapLoad}
