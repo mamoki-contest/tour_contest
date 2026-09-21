@@ -1,5 +1,9 @@
 # Welcome to React Router!
 
+> **배포하러 왔다면 [`DEPLOY.md`](./DEPLOY.md) 를 보세요.** 이 README 는 React Router
+> 템플릿이 준 글이라 이 프로젝트의 배포 방식(Vercel · 환경 변수 · 카카오 도메인 등록 ·
+> 로컬과 같은지 확인하는 체크리스트)이 들어 있지 않습니다.
+
 A modern, production-ready template for building full-stack React applications using React Router.
 
 [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
@@ -43,6 +47,9 @@ npm run build
 ```
 
 ## Deployment
+
+> **이 절은 템플릿의 일반 안내입니다.** 이 프로젝트를 실제로 올리는 절차는
+> [`DEPLOY.md`](./DEPLOY.md) 에 있습니다 — Vercel 이 정본이고, 아래 Docker 는 대안입니다.
 
 ### Docker Deployment
 
