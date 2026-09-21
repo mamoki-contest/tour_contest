@@ -25,7 +25,8 @@ import { CrowdBadge, NoForecastBadge, QuietDateValue } from "./crowd-badge";
 export function PlaceCard({
   place,
   href,
-  dateMode = "FLEXIBLE",
+  // 말해 주지 않으면 날짜 조건이 없는 것이다 — 묻지 않은 예측을 카드가 지어내지 않는다 (#53).
+  dateMode = "NONE",
   /** 저장 버튼. 카드 탭 영역과 겹치지 않게 별도 레이어로 얹는다 (U13). */
   saveButton,
 }: {

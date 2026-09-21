@@ -102,3 +102,26 @@ describe("cardFacts — 날짜 배지 (#49 예외)", () => {
     expect(stale.dateBadge).toEqual(fresh.dateBadge);
   });
 });
+
+/**
+ * 날짜를 묻지 않은 카드 (#53).
+ *
+ * 첫 진입의 상태다. 예측이 응답에 실려 와도 카드는 말하지 않는다 — 사용자가 고르지
+ * 않은 조건의 결과를 사실처럼 내놓는 것이기 때문이다.
+ */
+describe("cardFacts — 날짜 미정 (#53)", () => {
+  it("한산 예상일이 있어도 배지가 없다", () => {
+    expect(cardFacts(place({ quietDate: "2026-09-24" }), "NONE").dateBadge).toBeNull();
+  });
+
+  it("선택일 수준이 있어도 배지가 없다 — 고른 날짜가 아예 없는 상태다", () => {
+    expect(cardFacts(place({ selectedDateLevel: "BUSY" }), "NONE").dateBadge).toBeNull();
+  });
+
+  it("다른 사실은 그대로다 — 배지 하나만 빠진다", () => {
+    const facts = cardFacts(place({ quietDate: "2026-09-24" }), "NONE");
+
+    expect(facts.name).toBe("주문진 해수욕장");
+    expect(facts.category).toBe("레포츠");
+  });
+});

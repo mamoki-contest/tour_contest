@@ -48,7 +48,7 @@ import { isListQueryNavigation, isMapMoveNavigation, isPageNavigation } from "..
 import { listHeading } from "../lib/list-heading";
 import { normalizedTheme, searchNotice } from "../lib/search-notice";
 import { unrankedBoundary } from "../lib/unranked";
-import { fetchPlaceList } from "../lib/places.server";
+import { fetchForecastWindow, fetchPlaceList } from "../lib/places.server";
 import { fetchRegionVisitScale } from "../lib/regions.server";
 import { formatVisitPeriodShort } from "../lib/format";
 
@@ -67,10 +67,21 @@ export async function loader({ request }: Route.LoaderArgs) {
   const params = new URL(request.url).searchParams;
   const state = parseExploreState(params);
 
-  // 두 조회는 서로를 기다릴 이유가 없다 — 지역 방문 규모가 늦다고 목록이 늦지 않게 한다.
-  const [listResult, regions] = await Promise.all([
+  /*
+   * 날짜 미정에서는 목록 조회에 `dateMode` 를 보내지 않아 응답에 예측 지원 창이 없다 (#53).
+   *
+   * 창을 모르면 날짜 시트가 스스로 센 30일을 그리는데, 그 창은 백엔드가 가진 것보다
+   * 길어서 고를 수 있다고 그려 놓고 조회에서 되돌리게 된다 (#30 M3). 그래서 **시트를
+   * 연 순간에만** 가장 싼 조회(한 곳)로 창을 따로 묻는다 — 첫 진입의 절감은 그대로 두고,
+   * 날짜를 고르러 들어온 사람에게만 한 번 더 부른다.
+   */
+  const needsWindow = state.dateMode === "NONE" && state.sheet === "date";
+
+  // 세 조회는 서로를 기다릴 이유가 없다 — 지역 방문 규모가 늦다고 목록이 늦지 않게 한다.
+  const [listResult, regions, sheetWindow] = await Promise.all([
     fetchPlaceList(request.signal, state),
     fetchRegionVisitScale(request.signal),
+    needsWindow ? fetchForecastWindow(request.signal) : Promise.resolve(null),
   ]);
 
   if (!regions.ok) {
@@ -120,6 +131,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       dropped,
       appliedRegion,
       kakaoAppKey,
+      forecastWindow: sheetWindow,
       error: { dataName: result.failure.dataName },
     };
   }
@@ -130,6 +142,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     dropped,
     appliedRegion,
     kakaoAppKey,
+    // 목록이 창을 말해 주면 그것이 먼저다 — 따로 부른 값은 날짜 미정일 때만 있다.
+    forecastWindow: result.data.forecastWindow ?? sheetWindow,
     error: null,
   };
 }
@@ -161,7 +175,7 @@ export function shouldRevalidate({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { data, regions, dropped, appliedRegion, kakaoAppKey, error } = loaderData;
+  const { data, regions, dropped, appliedRegion, kakaoAppKey, forecastWindow, error } = loaderData;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -469,7 +483,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <DateSheet
           state={state}
           // 고를 수 있는 날은 응답이 말하는 예측 지원 창까지다 (#30 M3).
-          supported={data?.forecastWindow ?? null}
+          supported={forecastWindow}
           onClose={closeSheet}
           onApply={(dateMode, date) => applyFromSheet({ dateMode, date })}
         />

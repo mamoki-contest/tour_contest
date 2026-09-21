@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_EXPLORE_STATE,
   exploreHref,
+  hasActiveConditions,
+  hasDroppedDate,
   parseExploreState,
   parseSortOrder,
   toSearchParams,
@@ -126,5 +128,104 @@ describe("지도 범위 ⇄ 시·군 (#48)", () => {
     expect(withRegionCode(viewing, "51110").viewport).toBeNull();
     // 강원 전체로 되돌릴 때는 지도를 움직이지 않으니 보던 자리도 그대로 둔다.
     expect(withRegionCode(viewing, null).viewport).toEqual(viewing.viewport);
+  });
+});
+
+/**
+ * 날짜 상태 셋 (#53).
+ *
+ * `NONE` 이 없던 동안 첫 진입과 `한산한 날에 갈래요` 가 같은 주소·같은 화면이었다.
+ * 조건 칩은 `날짜 미정` 이라고 말하는데 카드에는 한산 예상일이 떴다 — 묻지 않은
+ * 예측을 보여주는 것이라, 무엇을 기준으로 보고 있는지 알 수 없었다.
+ */
+describe("날짜 모드 (#53)", () => {
+  /** 예측 창 안의 날짜를 고정해 둔다 — `오늘`이 흐르면 테스트가 어느 날 조용히 깨진다. */
+  const now = new Date("2026-09-21T09:00:00+09:00");
+  const soon = "2026-09-24";
+
+  it("첫 진입 기본은 날짜 미정이다 — 카드가 예측을 말하지 않는 상태", () => {
+    expect(DEFAULT_EXPLORE_STATE.dateMode).toBe("NONE");
+  });
+
+  it("`dateMode` 가 없는 옛 주소는 날짜 미정으로 읽는다", () => {
+    expect(parseExploreState(new URLSearchParams(""), now).dateMode).toBe("NONE");
+    expect(parseExploreState(new URLSearchParams("q=커피&sort=MENTION_ASC"), now).dateMode).toBe(
+      "NONE",
+    );
+  });
+
+  it("모르는 값도 날짜 미정으로 돌린다 — 주소를 손댄 값의 뜻을 지어내지 않는다", () => {
+    expect(parseExploreState(new URLSearchParams("dateMode=QUIET"), now).dateMode).toBe("NONE");
+  });
+
+  it("`dateMode=FLEXIBLE` 은 그대로 읽는다 — 사용자가 고른 모드다", () => {
+    const state = parseExploreState(new URLSearchParams("dateMode=FLEXIBLE"), now);
+
+    expect(state.dateMode).toBe("FLEXIBLE");
+    expect(state.date).toBeNull();
+  });
+
+  it("유연 모드에 날짜가 붙어 있어도 날짜는 버린다 — 두 모드가 섞이지 않게", () => {
+    expect(parseExploreState(new URLSearchParams(`dateMode=FLEXIBLE&date=${soon}`), now).date)
+      .toBeNull();
+  });
+
+  it("`dateMode=FIXED&date=` 는 모드와 날짜를 함께 읽는다", () => {
+    const state = parseExploreState(new URLSearchParams(`dateMode=FIXED&date=${soon}`), now);
+
+    expect(state.dateMode).toBe("FIXED");
+    expect(state.date).toBe(soon);
+  });
+
+  it("예측이 닿지 않는 날짜는 조건째 풀려 날짜 미정이 된다 (#13)", () => {
+    const state = parseExploreState(new URLSearchParams("dateMode=FIXED&date=2020-01-01"), now);
+
+    // 고르지도 않은 `한산한 날`로 떨어뜨리지 않는다 — 그것도 사용자의 선택이 아니다.
+    expect(state.dateMode).toBe("NONE");
+    expect(state.date).toBeNull();
+    expect(hasDroppedDate(new URLSearchParams("dateMode=FIXED&date=2020-01-01"), now)).toBe(true);
+  });
+
+  it("날짜 미정은 주소에 적지 않는다", () => {
+    expect(exploreHref(DEFAULT_EXPLORE_STATE)).toBe("/");
+  });
+
+  it("`한산한 날`은 주소에 남는다 — 첫 진입과 다른 주소여야 한다", () => {
+    const flexible = { ...DEFAULT_EXPLORE_STATE, dateMode: "FLEXIBLE" as const };
+
+    expect(exploreHref(flexible)).toBe("/?dateMode=FLEXIBLE");
+    expect(exploreHref(flexible)).not.toBe(exploreHref(DEFAULT_EXPLORE_STATE));
+  });
+
+  it("고른 날짜는 모드와 함께 적힌다", () => {
+    const params = toSearchParams({
+      ...DEFAULT_EXPLORE_STATE,
+      dateMode: "FIXED",
+      date: soon,
+    });
+
+    expect(params.get("dateMode")).toBe("FIXED");
+    expect(params.get("date")).toBe(soon);
+  });
+
+  it("세 상태 모두 주소를 돌아 제자리로 온다", () => {
+    const states = [
+      DEFAULT_EXPLORE_STATE,
+      { ...DEFAULT_EXPLORE_STATE, dateMode: "FLEXIBLE" as const },
+      { ...DEFAULT_EXPLORE_STATE, dateMode: "FIXED" as const, date: soon },
+    ];
+
+    for (const state of states) {
+      const restored = parseExploreState(toSearchParams(state), now);
+      expect([restored.dateMode, restored.date]).toEqual([state.dateMode, state.date]);
+    }
+  });
+
+  it("날짜 미정은 걸린 조건이 아니다 — 지울 것이 없는데 `초기화`를 권하지 않는다", () => {
+    expect(hasActiveConditions(DEFAULT_EXPLORE_STATE)).toBe(false);
+    expect(hasActiveConditions({ ...DEFAULT_EXPLORE_STATE, dateMode: "FLEXIBLE" })).toBe(true);
+    expect(hasActiveConditions({ ...DEFAULT_EXPLORE_STATE, dateMode: "FIXED", date: soon })).toBe(
+      true,
+    );
   });
 });

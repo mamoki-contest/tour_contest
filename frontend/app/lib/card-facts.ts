@@ -53,6 +53,12 @@ export function cardFacts(
 }
 
 /**
+ * 날짜를 묻지 않았으면 예측도 내놓지 않는다 (#53).
+ *
+ * `NONE` 은 첫 진입의 상태다. 이 자리에서 한산 예상일을 그리면, 사용자가 고르지도
+ * 않은 조건의 결과를 카드가 사실처럼 말하게 된다 — 조건 칩은 `날짜 미정` 이라고
+ * 말하는데 카드만 다른 이야기를 하던 것이 #53의 증상이었다.
+ *
  * 예측이 없으면 **배지 자체를 그리지 않는다** — `예측 정보 없음` 점선 배지도 두지 않는다.
  *
  * 전에는 빈자리가 `예측이 좋다`로 읽힐까 봐 자리를 지켰다. 그 걱정은 카드가 배지를
@@ -65,6 +71,8 @@ export function cardFacts(
  * 대신 띄우면, 사용자가 고른 날짜가 아닌 다른 날의 이야기가 슬쩍 끼어든다.
  */
 function dateBadge(forecast: PlaceForecastSummary, dateMode: DateMode): CardDateBadge | null {
+  if (dateMode === "NONE") return null;
+
   if (dateMode === "FIXED") {
     return forecast.selectedDateLevel === null
       ? null
