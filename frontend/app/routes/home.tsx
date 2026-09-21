@@ -44,7 +44,7 @@ import {
 import { exploreDetailHref } from "../lib/back-link";
 import { formatBaselineCaption, formatStaleCaption, isStale } from "../lib/data-status";
 import { useHelpSeen } from "../lib/use-help-seen";
-import { isListQueryNavigation, isPageNavigation } from "../lib/list-loading";
+import { isListQueryNavigation, isMapMoveNavigation, isPageNavigation } from "../lib/list-loading";
 import { listHeading } from "../lib/list-heading";
 import { normalizedTheme, searchNotice } from "../lib/search-notice";
 import { unrankedBoundary } from "../lib/unranked";
@@ -139,7 +139,7 @@ export async function loader({ request }: Route.LoaderArgs) {
  *
  * 시트 스냅(`snap`)과 지도 위치(`c`·`z`)가 그것이다. 특히 지도 위치는 **사용자가 지도를
  * 미는 동안 계속 바뀐다** — 여기서 걸러 내지 않으면 손가락을 뗄 때마다 목록 전체를
- * 다시 부른다. 조회 범위는 `이 지도 영역에서 검색` 을 눌러야 확정되는 `bbox` 쪽이다.
+ * 다시 부른다. 조회 범위는 조작이 잦아든 뒤에 한 번 적히는 `bbox` 쪽이다 (#48).
  */
 const VIEW_ONLY_PARAMS = ["snap", "c", "z"];
 
@@ -176,8 +176,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
    */
   const navigation = useNavigation();
   const location = useLocation();
+  /*
+   * 지도를 민 것만은 예외다 (#48). 조회 조건이 분명히 바뀌었는데도 스켈레톤을 켜지
+   * 않는다 — 지도를 훑는 동안 목록이 회색 카드로 바뀌었다 돌아오기를 되풀이하면,
+   * 방금 본 곳이 어디였는지 잃는다. 이전 목록을 그대로 두고 헤더의 `N곳` 이
+   * 갱신되는 것으로 바뀌었음을 말한다.
+   */
   const listLoading =
-    revalidator.state !== "idle" || isListQueryNavigation(location, navigation.location);
+    revalidator.state !== "idle" ||
+    (isListQueryNavigation(location, navigation.location) &&
+      !isMapMoveNavigation(location, navigation.location));
   // `더 보기`는 읽던 목록을 덮지 않는다 — 버튼 자신이 진행 중임을 말한다.
   const loadingMore = isPageNavigation(location, navigation.location);
 
@@ -211,12 +219,23 @@ export default function Home({ loaderData }: Route.ComponentProps) {
    */
   const helpSeen = useHelpSeen(state.sheet === "help");
 
-  const searchThisArea = useCallback(
+  /**
+   * 지도가 멎으면 보이는 범위로 목록을 다시 부른다 (#48).
+   *
+   * 누를 것이 없어졌으므로 이 이동은 **사용자가 의도한 조회**이면서도 히스토리를 쌓지
+   * 않는다(`replace`). 지도를 훑는 동안 쌓인 범위를 뒤로가기가 한 걸음씩 되감으면,
+   * 상세 이전의 탐색 화면으로 돌아가는 길이 수십 걸음 뒤로 밀린다.
+   *
+   * 시·군 조건은 함께 풀린다(`withMapBounds`): 두 범위가 AND 로 걸리면 조건 칩이
+   * 말하는 범위와 실제 조회 범위가 달라지고, 칩은 시·군 이름만 말해 사용자가 그
+   * 사실을 알 수 없다. 쪽 수도 첫 쪽으로 돌아간다 — 늘려 둔 쪽은 다른 목록의 쪽이다.
+   */
+  const autoRefresh = useCallback(
     (bounds: MapBounds) => {
-      // 지도를 움직인 것만으로는 목록이 바뀌지 않는다 — 사용자가 눌러야 범위가 확정된다.
-      // 시·군 조건은 함께 풀린다: 두 범위가 AND 로 걸리면 조건 칩이 말하는 범위와
-      // 실제 조회 범위가 달라진다.
-      navigate(exploreHref(withMapBounds(state, bounds)), { preventScrollReset: true });
+      navigate(exploreHref(withMapBounds(state, bounds)), {
+        replace: true,
+        preventScrollReset: true,
+      });
     },
     [navigate, state],
   );
@@ -325,10 +344,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             appKey={kakaoAppKey}
             places={data?.places ?? []}
             regionCode={appliedRegion}
-            initialViewport={state.viewport}
+            urlViewport={state.viewport}
             initialBounds={state.bounds}
             onLoadStateChange={setMapLoad}
-            onSearchThisArea={searchThisArea}
+            onAutoRefresh={autoRefresh}
             onViewportChange={rememberViewport}
           />
         ) : null}

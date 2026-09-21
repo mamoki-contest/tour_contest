@@ -6,6 +6,9 @@ import {
   parseExploreState,
   parseSortOrder,
   toSearchParams,
+  withMapBounds,
+  withRegionCode,
+  type MapBounds,
 } from "./explore-params";
 
 /**
@@ -62,5 +65,66 @@ describe("toSearchParams — 정렬", () => {
     const state = parseExploreState(new URLSearchParams("sort=INTEREST_ASC"));
 
     expect(exploreHref(state)).toBe("/?sort=MENTION_ASC");
+  });
+});
+
+/**
+ * 지도 범위와 시·군은 서로를 지운다 (WIREFRAME 「지도와 URL 상태」).
+ *
+ * 둘을 같이 두면 백엔드에서 AND 로 걸려 조회 범위가 어느 쪽도 아니게 되는데, 조건
+ * 칩은 시·군 이름만 말해 사용자가 그 사실을 알 수 없다. 지도가 움직일 때마다 이
+ * 전환이 일어나게 된 뒤로는(#48) 더 자주 지나가는 길이다.
+ */
+describe("지도 범위 ⇄ 시·군 (#48)", () => {
+  const bounds: MapBounds = { swLat: 37.7, swLng: 128.8, neLat: 37.9, neLng: 129.0 };
+
+  it("지도 범위가 확정되면 시·군 조건은 풀린다 — 칩이 `이 지도 범위`를 말할 수 있게", () => {
+    const next = withMapBounds({ ...DEFAULT_EXPLORE_STATE, regionCode: "51110" }, bounds);
+
+    expect(next.bounds).toEqual(bounds);
+    expect(next.regionCode).toBeNull();
+  });
+
+  it("시·군을 고르면 지도 범위 조건은 풀린다 — 반대 방향도 대칭이다", () => {
+    const next = withRegionCode({ ...DEFAULT_EXPLORE_STATE, bounds }, "51110");
+
+    expect(next.regionCode).toBe("51110");
+    expect(next.bounds).toBeNull();
+  });
+
+  it("어느 쪽으로 바뀌든 쪽 수는 첫 쪽으로 돌아간다 — 늘려 둔 쪽은 다른 목록의 쪽이다", () => {
+    const read = { ...DEFAULT_EXPLORE_STATE, page: 3 };
+
+    expect(withMapBounds(read, bounds).page).toBe(1);
+    expect(withRegionCode({ ...read, bounds }, "51110").page).toBe(1);
+  });
+
+  it("지도 범위는 주소에 소수점 다섯 자리로 적힌다", () => {
+    expect(toSearchParams(withMapBounds(DEFAULT_EXPLORE_STATE, bounds)).get("bbox")).toBe(
+      "37.70000,128.80000,37.90000,129.00000",
+    );
+  });
+
+  it("주소에 적힌 범위는 그대로 되살아난다 — 새로고침·뒤로가 같은 범위를 본다", () => {
+    const href = exploreHref(withMapBounds(DEFAULT_EXPLORE_STATE, bounds));
+    const restored = parseExploreState(new URLSearchParams(href.slice(2)));
+
+    expect(restored.bounds).toEqual({
+      swLat: 37.7,
+      swLng: 128.8,
+      neLat: 37.9,
+      neLng: 129,
+    });
+  });
+
+  it("시·군을 고르면 보던 자리도 버린다 — 지도가 그리로 옮겨 가기 때문이다", () => {
+    const viewing = {
+      ...DEFAULT_EXPLORE_STATE,
+      viewport: { lat: 37.8, lng: 128.9, level: 7 },
+    };
+
+    expect(withRegionCode(viewing, "51110").viewport).toBeNull();
+    // 강원 전체로 되돌릴 때는 지도를 움직이지 않으니 보던 자리도 그대로 둔다.
+    expect(withRegionCode(viewing, null).viewport).toEqual(viewing.viewport);
   });
 });
