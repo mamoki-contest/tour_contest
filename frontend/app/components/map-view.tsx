@@ -130,6 +130,13 @@ export function MapView({
    *
    * `getBounds()` 는 컨테이너 전체를 말한다. 모바일에서는 바텀시트가 아래 55%를
    * 덮으므로, 그대로 쓰면 한 번도 보인 적 없는 남쪽까지 조회 범위에 들어간다.
+   *
+   * **네 모서리를 다 본다.** 화면의 사각형은 위·경도에서는 사각형이 아니다 —
+   * 카카오맵은 127°E 를 중심으로 한 횡축 메르카토르라, 중앙 자오선에서 멀어질수록
+   * 화면의 `위` 가 정북에서 기울어진다. 강릉(128.8°E) 에서 재 보니 왼쪽 위 모서리가
+   * 오른쪽 위 모서리보다 **1.46km(보이는 높이의 5.2%) 북쪽**이었다. 마주 보는 두
+   * 모서리만 쓰면 그 띠가 조회 범위 밖으로 떨어져, 화면에 보이는데 목록에 없는
+   * 장소가 생긴다.
    */
   const visibleBounds = useCallback((): MapBounds | null => {
     const map = mapRef.current;
@@ -150,14 +157,17 @@ export function MapView({
       typeof projection.coordsFromContainerPoint === "function" &&
       typeof maps.Point === "function"
     ) {
-      const southWest = projection.coordsFromContainerPoint(
-        new maps.Point(rect.left, rect.bottom),
-      );
-      const northEast = projection.coordsFromContainerPoint(new maps.Point(rect.right, rect.top));
-      return boundsFromCorners(
-        { lat: southWest.getLat(), lng: southWest.getLng() },
-        { lat: northEast.getLat(), lng: northEast.getLng() },
-      );
+      const corners = [
+        [rect.left, rect.top],
+        [rect.right, rect.top],
+        [rect.left, rect.bottom],
+        [rect.right, rect.bottom],
+      ].map(([x, y]) => {
+        const point = projection.coordsFromContainerPoint(new maps.Point(x, y));
+        return { lat: point.getLat(), lng: point.getLng() };
+      });
+      // 최소 폭으로 넓히지 않는다 — 여기서는 본 그대로가 조회 범위다.
+      return boundsOfPoints(corners, 0);
     }
 
     // SDK가 변환을 내주지 않는 경우에만 컨테이너 전체로 돌아간다.
