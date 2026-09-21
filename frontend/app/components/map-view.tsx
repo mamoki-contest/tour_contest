@@ -14,6 +14,7 @@ import {
   type KakaoMapsApi,
   type KakaoMarker,
 } from "../lib/kakao-map.client";
+import { createMapGestureTracker, isSameViewport } from "../lib/map-auto-refresh";
 
 /** 강원특별자치도를 감싸는 경계. 첫 진입은 이 범위가 한눈에 들어오게 맞춘다. */
 const GANGWON_BOUNDS = { swLat: 37.02, swLng: 127.05, neLat: 38.62, neLng: 129.4 };
@@ -22,15 +23,6 @@ const GANGWON_LEVEL = 12;
 
 /** 경계를 맞출 때 가장자리에 두는 여백(px). 아래쪽만 시트가 덮는 만큼 따로 잡는다. */
 const EDGE_PADDING = 16;
-
-/**
- * 프로그램이 지도를 옮긴 뒤 이벤트가 잦아들 때까지 무시할 시간(ms).
- *
- * 카카오맵은 `setBounds`·`setLevel` 에도 `zoom_changed` 를 쏜다. 걸러내지 않으면
- * 시·군을 골라 지도가 이동한 것을 `사용자가 움직였다` 로 읽어 `이 지도 영역에서
- * 검색` 버튼이 저절로 뜨고, 주소에 옮겨 간 자리가 적힌다.
- */
-const PROGRAMMATIC_QUIET_MS = 400;
 
 function isDesktopViewport(): boolean {
   if (typeof window === "undefined") return false;
@@ -69,10 +61,10 @@ export function MapView({
   appKey,
   places,
   regionCode,
-  initialViewport,
+  urlViewport,
   initialBounds,
   onLoadStateChange,
-  onSearchThisArea,
+  onAutoRefresh,
   onViewportChange,
 }: {
   appKey: string;
@@ -82,13 +74,23 @@ export function MapView({
    * 조회가 끝나기 전에 옮기면 이전 시·군의 마커로 지도를 맞추게 된다.
    */
   regionCode: string | null;
-  /** 주소에 실려 온 지도 위치. 있으면 첫 맞춤이 이 값을 쓴다 (U6). */
-  initialViewport: MapViewport | null;
+  /**
+   * 주소가 말하는 지도 위치 (U6).
+   *
+   * 첫 맞춤이 이 값을 쓰고, 그 뒤로도 계속 본다 — 뒤로가기가 옛 주소를 되살리면
+   * 지도도 그 자리로 돌아가야 목록과 지도가 같은 범위를 말한다 (#48).
+   */
+  urlViewport: MapViewport | null;
   /** 주소에 실려 온 조회 경계. 위치가 없을 때의 차선책 — 조회 범위와 화면을 맞춘다. */
   initialBounds: MapBounds | null;
   onLoadStateChange: (state: MapLoadState) => void;
-  /** 사용자가 `이 지도 영역에서 검색`을 눌렀을 때 확정되는 경계. */
-  onSearchThisArea: (bounds: MapBounds) => void;
+  /**
+   * 사용자 조작이 잦아든 뒤 확정되는 조회 경계 (#48).
+   *
+   * 버튼이 없어졌으므로 이 콜백이 목록을 바꾸는 유일한 입구다. 부르는 쪽은 이미
+   * 디바운스를 거쳤고 프로그램 이동은 걸러진 뒤다 — 받는 쪽은 그대로 조회하면 된다.
+   */
+  onAutoRefresh: (bounds: MapBounds) => void;
   /** 사용자가 지도를 옮길 때마다 주소에 적어 둘 위치. 조회는 다시 돌지 않는다. */
   onViewportChange: (viewport: MapViewport) => void;
 }) {
@@ -96,22 +98,19 @@ export function MapView({
   const mapRef = useRef<KakaoMap | null>(null);
   const markersRef = useRef<KakaoMarker[]>([]);
   const [loadState, setLoadState] = useState<MapLoadState>("LOADING");
-  /** 지도를 움직인 뒤에만 검색 버튼이 나타난다. */
-  const [moved, setMoved] = useState(false);
-
-  /** 프로그램이 옮기는 중. 그동안의 지도 이벤트는 사용자의 몸짓이 아니다. */
-  const programmaticRef = useRef(0);
 
   /** 콜백이 매 렌더 새로 오더라도 지도를 다시 만들지 않게 최신 값만 붙잡아 둔다. */
   const viewportChangeRef = useRef(onViewportChange);
   viewportChangeRef.current = onViewportChange;
+  const autoRefreshRef = useRef(onAutoRefresh);
+  autoRefreshRef.current = onAutoRefresh;
 
   /**
    * 첫 렌더의 주소 상태. 지도 생성 효과는 `appKey` 에만 매달려 있으므로, 그 뒤에
    * 바뀐 값이 아니라 **마운트 시점의 값**으로 첫 화면을 맞춰야 한다.
    */
   const initialRef = useRef({
-    viewport: initialViewport,
+    viewport: urlViewport,
     bounds: initialBounds,
     regionCode,
   });
@@ -126,14 +125,86 @@ export function MapView({
     initialRef.current.viewport ? initialRef.current.regionCode : undefined,
   );
 
-  /** 지도를 프로그램으로 옮긴다 — 그 사이에 오는 이벤트는 사용자의 것이 아니다. */
-  const moveProgrammatically = useCallback((move: () => void) => {
-    programmaticRef.current += 1;
-    move();
-    window.setTimeout(() => {
-      programmaticRef.current = Math.max(0, programmaticRef.current - 1);
-    }, PROGRAMMATIC_QUIET_MS);
+  /**
+   * 사용자가 실제로 본 범위.
+   *
+   * `getBounds()` 는 컨테이너 전체를 말한다. 모바일에서는 바텀시트가 아래 55%를
+   * 덮으므로, 그대로 쓰면 한 번도 보인 적 없는 남쪽까지 조회 범위에 들어간다.
+   *
+   * **네 모서리를 다 본다.** 화면의 사각형은 위·경도에서는 사각형이 아니다 —
+   * 카카오맵은 127°E 를 중심으로 한 횡축 메르카토르라, 중앙 자오선에서 멀어질수록
+   * 화면의 `위` 가 정북에서 기울어진다. 강릉(128.8°E) 에서 재 보니 왼쪽 위 모서리가
+   * 오른쪽 위 모서리보다 **1.46km(보이는 높이의 5.2%) 북쪽**이었다. 마주 보는 두
+   * 모서리만 쓰면 그 띠가 조회 범위 밖으로 떨어져, 화면에 보이는데 목록에 없는
+   * 장소가 생긴다.
+   */
+  const visibleBounds = useCallback((): MapBounds | null => {
+    const map = mapRef.current;
+    const container = containerRef.current;
+    const maps = typeof window !== "undefined" ? window.kakao?.maps : undefined;
+    if (!map || !container || !maps) return null;
+
+    const rect = visibleContainerRect(
+      container.clientWidth,
+      container.clientHeight,
+      currentSheetCover(),
+    );
+
+    // 변환은 지도가 아니라 투영 객체가 쥐고 있다.
+    const projection = typeof map.getProjection === "function" ? map.getProjection() : null;
+    if (
+      projection &&
+      typeof projection.coordsFromContainerPoint === "function" &&
+      typeof maps.Point === "function"
+    ) {
+      const corners = [
+        [rect.left, rect.top],
+        [rect.right, rect.top],
+        [rect.left, rect.bottom],
+        [rect.right, rect.bottom],
+      ].map(([x, y]) => {
+        const point = projection.coordsFromContainerPoint(new maps.Point(x, y));
+        return { lat: point.getLat(), lng: point.getLng() };
+      });
+      // 최소 폭으로 넓히지 않는다 — 여기서는 본 그대로가 조회 범위다.
+      return boundsOfPoints(corners, 0);
+    }
+
+    // SDK가 변환을 내주지 않는 경우에만 컨테이너 전체로 돌아간다.
+    const bounds = map.getBounds();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    return boundsFromCorners(
+      { lat: sw.getLat(), lng: sw.getLng() },
+      { lat: ne.getLat(), lng: ne.getLng() },
+    );
   }, []);
+
+  /**
+   * 누가 움직였고 언제 끝났는지를 가리는 곳 (#48).
+   *
+   * 한 번만 만들고 화면이 다시 그려져도 같은 것을 쓴다 — 매 렌더 새로 만들면 예약해
+   * 둔 재조회와 억제 상태가 함께 버려져, 미는 동안에는 영영 잦아들지 않는다.
+   */
+  const [gestures] = useState(() =>
+    createMapGestureTracker({
+      onSettled: () => {
+        const bounds = visibleBounds();
+        // 경계를 못 구하면 조회하지 않는다 — 지어낸 범위로 목록을 바꾸지 않는다.
+        if (!bounds) return;
+        autoRefreshRef.current(bounds);
+      },
+    }),
+  );
+
+  /** 지도를 프로그램으로 옮긴다 — 그 사이에 오는 이벤트는 사용자의 것이 아니다. */
+  const moveProgrammatically = useCallback(
+    (move: () => void) => gestures.runProgrammatic(move),
+    [gestures],
+  );
+
+  // 떠난 화면이 뒤늦게 목록을 바꾸지 않게, 예약된 재조회는 언마운트 때 버린다.
+  useEffect(() => () => gestures.cancel(), [gestures]);
 
   useEffect(() => {
     onLoadStateChange(loadState);
@@ -194,9 +265,16 @@ export function MapView({
           });
         });
 
+        /*
+         * 사용자가 지도를 움직였다 (#48).
+         *
+         * 자리(`c`·`z`)는 **곧바로** 적는다 — 조회를 다시 돌리지 않는 값이라 싸고,
+         * 민 직후에 카드를 눌러 상세로 떠나도 돌아올 자리가 남는다. 조회 범위는
+         * 그렇지 않다: 미는 도중마다 부르면 조회가 손가락을 따라다니므로, 손이
+         * 멎은 뒤에 한 번만 부르게 추적기에 맡긴다.
+         */
         const onUserMove = () => {
-          if (programmaticRef.current > 0) return;
-          setMoved(true);
+          if (!gestures.handleMapEvent()) return;
           const center = map.getCenter();
           viewportChangeRef.current({
             lat: center.getLat(),
@@ -219,7 +297,7 @@ export function MapView({
     return () => {
       cancelled = true;
     };
-  }, [appKey, moveProgrammatically]);
+  }, [appKey, gestures, moveProgrammatically]);
 
   /** 마커는 목록과 같은 데이터를 쓴다 — 지도와 목록이 서로 다른 집합을 말하지 않게. */
   useEffect(() => {
@@ -247,11 +325,43 @@ export function MapView({
   }, [places, loadState]);
 
   /**
+   * 주소의 자리가 **밖에서** 바뀌면 지도가 그리로 따라간다 (U6 · #48).
+   *
+   * 뒤로가기가 옛 주소를 되살리면 목록은 그 범위로 돌아가는데 지도는 그대로 남아,
+   * 화면 둘이 서로 다른 범위를 말한다. 지도가 움직인 것은 이제 곧 조회 범위이므로
+   * 어긋남이 그만큼 더 크게 드러난다.
+   *
+   * 사용자가 민 직후에는 주소가 지도를 따라 적히므로 둘이 같다 — 그때는 움직이지
+   * 않는다. 이 구분이 없으면 지도와 주소가 서로를 밀어 무한히 오간다.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    const maps = typeof window !== "undefined" ? window.kakao?.maps : undefined;
+    if (!map || !maps || loadState !== "READY" || !urlViewport) return;
+
+    const center = map.getCenter();
+    const showing = { lat: center.getLat(), lng: center.getLng(), level: map.getLevel() };
+    if (isSameViewport(showing, urlViewport)) return;
+
+    moveProgrammatically(() => {
+      map.setCenter(new maps.LatLng(urlViewport.lat, urlViewport.lng));
+      map.setLevel(urlViewport.level);
+    });
+    // 객체가 매 렌더 새로 오므로 값만 본다 — 같은 자리에 효과가 다시 돌지 않게.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlViewport?.lat, urlViewport?.lng, urlViewport?.level, loadState, moveProgrammatically]);
+
+  /**
    * 시·군을 새로 고르면 지도가 그리로 간다.
    *
    * 목록만 바뀌고 지도가 강원 전체에 머물면, 고른 시·군이 어디인지 지도에서 알 수 없다.
    * 한 번 맞춘 시·군은 다시 맞추지 않는다 — 사용자가 그 뒤에 직접 옮긴 화면을
    * 목록이 갱신될 때마다 되돌리지 않기 위해서다.
+   *
+   * 이 이동은 **목록을 다시 부르지 않는다** (#48). 시·군을 고른 순간 이미 그 시·군으로
+   * 한 번 조회했고, 여기서 만들어진 경계로 또 부르면 방금 고른 시·군이 자기가 만든
+   * 지도 범위에 덮여 칩이 `이 지도 범위` 로 바뀐다. 대신 옮겨 간 자리만 한 번 적어
+   * 둔다 — 그래야 새로고침·뒤로가 그 시·군을 보던 축척으로 돌아온다 (U6).
    */
   useEffect(() => {
     const map = mapRef.current;
@@ -284,75 +394,24 @@ export function MapView({
         currentSheetCover(),
         EDGE_PADDING,
       );
+      const center = map.getCenter();
+      viewportChangeRef.current({
+        lat: center.getLat(),
+        lng: center.getLng(),
+        level: map.getLevel(),
+      });
     });
     fittedRegionRef.current = regionCode;
   }, [places, regionCode, loadState, moveProgrammatically]);
 
-  /**
-   * 사용자가 실제로 본 범위.
-   *
-   * `getBounds()` 는 컨테이너 전체를 말한다. 모바일에서는 바텀시트가 아래 55%를
-   * 덮으므로, 그대로 쓰면 한 번도 보인 적 없는 남쪽까지 조회 범위에 들어간다.
-   */
-  const visibleBounds = useCallback((): MapBounds | null => {
-    const map = mapRef.current;
-    const container = containerRef.current;
-    const maps = typeof window !== "undefined" ? window.kakao?.maps : undefined;
-    if (!map || !container || !maps) return null;
-
-    const rect = visibleContainerRect(
-      container.clientWidth,
-      container.clientHeight,
-      currentSheetCover(),
-    );
-
-    // 변환은 지도가 아니라 투영 객체가 쥐고 있다.
-    const projection = typeof map.getProjection === "function" ? map.getProjection() : null;
-    if (
-      projection &&
-      typeof projection.coordsFromContainerPoint === "function" &&
-      typeof maps.Point === "function"
-    ) {
-      const southWest = projection.coordsFromContainerPoint(
-        new maps.Point(rect.left, rect.bottom),
-      );
-      const northEast = projection.coordsFromContainerPoint(new maps.Point(rect.right, rect.top));
-      return boundsFromCorners(
-        { lat: southWest.getLat(), lng: southWest.getLng() },
-        { lat: northEast.getLat(), lng: northEast.getLng() },
-      );
-    }
-
-    // SDK가 변환을 내주지 않는 경우에만 컨테이너 전체로 돌아간다.
-    const bounds = map.getBounds();
-    const sw = bounds.getSouthWest();
-    const ne = bounds.getNorthEast();
-    return boundsFromCorners(
-      { lat: sw.getLat(), lng: sw.getLng() },
-      { lat: ne.getLat(), lng: ne.getLng() },
-    );
-  }, []);
-
   return (
     <div className="absolute inset-0">
+      {/*
+        지도 위에 더 이상 떠 있는 것이 없다 (#48). 범위를 확정하던 버튼은 사라졌고,
+        바뀌었다는 사실은 시트 헤더의 `N곳` 이 말한다 — 지도 면적을 돌려준 쪽이
+        `무엇을 눌러야 하나` 를 하나 줄인다.
+      */}
       <div ref={containerRef} className="h-full w-full" aria-label="강원 관광지 지도" role="application" />
-
-      {loadState === "READY" && moved ? (
-        <div className="absolute inset-x-0 top-[calc(env(safe-area-inset-top)+72px)] flex justify-center lg:top-20">
-          <button
-            type="button"
-            onClick={() => {
-              const bounds = visibleBounds();
-              if (!bounds) return;
-              onSearchThisArea(bounds);
-              setMoved(false);
-            }}
-            className="type-label-md inline-flex h-10 items-center rounded-lg bg-surface px-4 text-primary-strong shadow-float transition-colors duration-200"
-          >
-            이 지도 영역에서 검색
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }

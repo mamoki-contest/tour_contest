@@ -37,6 +37,40 @@ export function isListQueryNavigation(
   return listQuerySignature(next.search) !== listQuerySignature(current.search);
 }
 
+/**
+ * 지도를 움직여서 일어난 이동인지 (#48).
+ *
+ * 조회 조건은 분명히 바뀌었다 — 그래서 `isListQueryNavigation` 은 참이다. 그런데도
+ * 스켈레톤으로 덮지 않는다. 지도를 미는 동안 목록이 400ms 마다 세 장의 회색 카드로
+ * 바뀌었다 사라지면, 사용자는 방금 무엇을 보고 있었는지 잃는다. 이전 목록을 그대로
+ * 두고 헤더의 `N곳` 이 갱신되는 것으로 바뀌었음을 말한다.
+ *
+ * 시·군이 함께 풀리는 것도 지도 이동의 일부다 — 지도 범위가 시·군을 이기는 순간이
+ * 곧 이 이동이므로, `region` 이 사라진 것만으로 다른 종류의 이동이 되지는 않는다.
+ * 반대로 **새 `region` 이 붙은 이동**은 시·군을 고른 것이므로 여기 들지 않는다.
+ */
+export function isMapMoveNavigation(
+  current: { pathname: string; search: string },
+  next: { pathname: string; search: string } | null | undefined,
+): boolean {
+  if (!next) return false;
+  if (next.pathname !== current.pathname) return false;
+
+  const from = new URLSearchParams(current.search);
+  const to = new URLSearchParams(next.search);
+
+  const nextBounds = to.get("bbox");
+  // 지도 범위로 **들어가는** 이동만 센다. 범위가 그대로면 지도가 움직인 것이 아니다.
+  if (!nextBounds || nextBounds === from.get("bbox")) return false;
+  // 지도 범위와 시·군은 함께 서지 않는다 — 둘 다 있으면 지도 이동이 아니다.
+  if (to.get("region")) return false;
+
+  return LIST_QUERY_KEYS.every(
+    (key) =>
+      key === "bbox" || key === "region" || (to.get(key) ?? "") === (from.get(key) ?? ""),
+  );
+}
+
 /** `더 보기` 가 부른 이동인지 — 조건은 그대로고 쪽만 늘어난 경우다. */
 export function isPageNavigation(
   current: { pathname: string; search: string },

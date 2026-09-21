@@ -29,7 +29,7 @@ export type SheetSnap = "peek" | "middle" | "full";
  */
 export type OpenSheet = "region" | "search" | "date" | "help";
 
-/** 지도 경계 — 목록 조회의 탐색 범위. 사용자가 `이 지도 영역에서 검색`을 눌러야 확정된다. */
+/** 지도 경계 — 목록 조회의 탐색 범위. 사용자가 지도를 움직이면 자동으로 확정된다 (#48). */
 export interface MapBounds {
   swLat: number;
   swLng: number;
@@ -43,8 +43,8 @@ export interface MapBounds {
  * 조회 조건이 아니라 **화면 위치**다. 그런데도 URL에 싣는 이유는 U6 때문이다:
  * 상세로 들어갔다 뒤로 오면 `MapView` 가 언마운트됐다가 다시 마운트되므로,
  * 위치가 URL에 없으면 축척이 강원 전체로 되돌아간다. `bbox` 만으로는 모자란다 —
- * 사용자가 확대만 하고 `이 지도 영역에서 검색` 을 누르지 않았을 때는 `bbox` 가
- * 아예 없기 때문이다.
+ * 지도가 멎기 전에 상세로 떠났거나 시·군으로 옮겨 간 직후에는 `bbox` 가 아직
+ * (또는 아예) 없기 때문이다.
  */
 export interface MapViewport {
   lat: number;
@@ -199,7 +199,7 @@ export function formatViewportCenter(viewport: MapViewport): string {
 }
 
 /**
- * `이 지도 영역에서 검색` 이 확정하는 상태.
+ * 지도가 멎었을 때 확정되는 상태 (#48).
  *
  * 시·군 조건을 함께 지운다. 둘을 같이 두면 백엔드에서 AND 로 걸려 조회 범위가
  * 어느 쪽도 아니게 되는데, 조건 칩은 시·군 이름만 말해 사용자가 그 사실을 알 수

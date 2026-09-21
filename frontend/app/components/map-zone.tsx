@@ -36,7 +36,7 @@ export function MapZone({
    * 기준 기간과 시·군 방문 규모로 가는 입구는 지도와 함께 죽을 이유가 없다 (#24).
    */
   legend?: React.ReactNode;
-  /** 지도 위에 뜨는 것들 — 상단 컴팩트 바, 이 지도 영역에서 검색 버튼. */
+  /** 지도 위에 뜨는 것 — 상단 컴팩트 바뿐이다. 범위 확정 버튼은 자동 갱신으로 대체됐다 (#48). */
   children?: React.ReactNode;
 }) {
   return (

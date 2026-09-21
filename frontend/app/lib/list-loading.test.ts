@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { isListQueryNavigation, isPageNavigation, listQuerySignature } from "./list-loading";
+import {
+  isListQueryNavigation,
+  isMapMoveNavigation,
+  isPageNavigation,
+  listQuerySignature,
+} from "./list-loading";
 
 const home = (search: string) => ({ pathname: "/", search });
 
@@ -44,5 +49,53 @@ describe("목록 로딩 판정 (#20)", () => {
     expect(listQuerySignature("?sort=INTEREST_ASC&region=51110")).toBe(
       listQuerySignature("?region=51110&sort=INTEREST_ASC"),
     );
+  });
+});
+
+describe("지도 이동이 부른 재조회 (#48)", () => {
+  it("지도를 움직여 범위가 바뀐 이동이다", () => {
+    expect(isMapMoveNavigation(home(""), home("?bbox=37,128,38,129"))).toBe(true);
+    expect(isMapMoveNavigation(home("?bbox=37,128,38,129"), home("?bbox=37.5,128.2,37.9,128.7"))).toBe(
+      true,
+    );
+  });
+
+  it("목록을 바꾸는 이동이면서도 스켈레톤은 켜지 않는다 — 읽던 목록을 남긴다", () => {
+    const from = home("");
+    const to = home("?bbox=37,128,38,129");
+
+    expect(isListQueryNavigation(from, to)).toBe(true);
+    expect(isMapMoveNavigation(from, to)).toBe(true);
+  });
+
+  it("시·군이 풀리고 지도 범위가 들어서는 것도 지도 이동이다", () => {
+    expect(isMapMoveNavigation(home("?region=51110"), home("?bbox=37,128,38,129"))).toBe(true);
+  });
+
+  it("시·군을 고른 이동은 지도 이동이 아니다 — 새 범위를 고른 것이라 스켈레톤이 맞다", () => {
+    expect(isMapMoveNavigation(home(""), home("?region=51110"))).toBe(false);
+    expect(isMapMoveNavigation(home("?bbox=37,128,38,129"), home("?region=51110"))).toBe(false);
+  });
+
+  it("범위와 함께 다른 조건이 바뀌면 지도 이동이 아니다", () => {
+    expect(isMapMoveNavigation(home(""), home("?bbox=37,128,38,129&sort=MENTION_ASC"))).toBe(false);
+    expect(isMapMoveNavigation(home("?q=커피"), home("?bbox=37,128,38,129"))).toBe(false);
+  });
+
+  it("범위가 그대로면 지도가 움직인 것이 아니다", () => {
+    const search = "?bbox=37,128,38,129";
+    expect(isMapMoveNavigation(home(search), home(`${search}&snap=full`))).toBe(false);
+    expect(isMapMoveNavigation(home(search), home(`${search}&page=2`))).toBe(false);
+  });
+
+  it("지도 위치(`c`·`z`)만 바뀐 이동은 조회 자체가 없다", () => {
+    expect(isMapMoveNavigation(home(""), home("?c=37.8,128.9&z=7"))).toBe(false);
+  });
+
+  it("다른 화면으로 떠나거나 이동 중이 아니면 지도 이동이 아니다", () => {
+    expect(isMapMoveNavigation(home(""), { pathname: "/places/1", search: "?bbox=37,128,38,129" })).toBe(
+      false,
+    );
+    expect(isMapMoveNavigation(home(""), null)).toBe(false);
   });
 });
