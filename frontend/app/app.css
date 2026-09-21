@@ -69,7 +69,11 @@
    font-weight: 700 은 살아 있어 폰트가 안 떠서 Pretendard 로 떨어질 때 굵기 700 이 유지된다. */
 @font-face {
   font-family: "Jua";
-  src: url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/BMJUA.woff") format("woff");
+  /* 자체 호스팅 우선(219KB, 한글 11,172자 전부). 라이선스·출처는 public/fonts/OFL-Jua.txt.
+     CDN 은 같은 서체의 woff 폴백(버전 고정). */
+  src:
+    url("/fonts/Jua.woff2") format("woff2"),
+    url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/BMJUA.woff") format("woff");
   font-weight: 400 700;
   font-style: normal;
   font-display: swap;
