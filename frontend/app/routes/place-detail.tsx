@@ -311,7 +311,11 @@ function RelatedSection({
         <>
           <ul className="flex gap-6 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible">
             {group.places.map((place) => (
-              <li key={`${place.name}-${place.rank ?? 0}`} className="w-[260px] shrink-0 sm:w-auto">
+              // 데스크톱 3열에서는 칸 너비가 트랙을 따르므로 `min-w-0` 으로 줄 수 있게 둔다.
+              <li
+                key={`${place.name}-${place.rank ?? 0}`}
+                className="w-[260px] shrink-0 sm:w-auto sm:min-w-0"
+              >
                 <RelatedPlaceCard place={place} />
               </li>
             ))}
