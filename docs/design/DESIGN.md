@@ -25,8 +25,9 @@ colors:
   green: "#03B26C"
   amber: "#FF9200"
 font:
-  # 주요 타이틀 전용. 서체 파일·웹폰트 라이선스 확정 전 — 첫 항목이 아직 없어 폴백(Pretendard)으로 렌더된다.
-  display: '"Sandoll CreamPang", Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, "Malgun Gothic", sans-serif'
+  # 주요 타이틀 전용 — 배달의민족 주아체. SIL Open Font License 1.1. http://font.woowahan.com/jua/
+  # 패밀리 이름이 "Jua" 인 이유는 Typography 절 참조 (OFL Reserved Font Name "BM JUA").
+  display: '"Jua", Pretendard, "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, "Malgun Gothic", sans-serif'
 typography:
   display:
     fontFamily: "{font.display}"
@@ -433,18 +434,37 @@ ADR-0002는 네 신호를 합치지 말라고 하는데, 문서로 분리해도 
 
 ## Typography
 
-**두 종을 쓴다 — 주요 타이틀은 `font.display`, 나머지 전부는 Pretendard.**
+**두 종을 쓴다 — 주요 타이틀은 `font.display`(배달의민족 주아체, 패밀리 이름 `Jua`), 나머지 전부는 Pretendard.**
 
 **Pretendard**를 400/500/600/700 네 굵기로 쓴다. 토스의 실제 서체(Toss Product Sans)는 토스 전용이므로 쓸 수 없고, Pretendard가 한글 자소 폭과 시각 보정에서 가장 가까운 공개 대체다. 크기와 행간 값 자체는 토스 실렌더에서 잰 TDS 스케일 그대로다.
 
-### font.display — 주요 타이틀 서체 (2026-09-21 결정, 자리만 만든 상태)
+### font.display — 주요 타이틀 서체 (2026-09-21 결정: 배달의민족 주아체)
 
-사용자 결정(2026-09-21)으로 **주요 타이틀에 Sandoll 크림빵**을 쓴다. 다만 **서체 파일·웹폰트 라이선스가 아직 확정 전이라 이번에는 갈아 끼울 자리만 만들었다** — 토큰(`font.display`)·CSS 변수(`--font-display`)·유틸리티 세 개까지만 있고, 실제 파일도 `@font-face`도 넣지 않았다. **지금 화면은 폴백인 Pretendard로 렌더된다.**
+사용자 결정(2026-09-21)으로 **주요 타이틀에 배달의민족 주아체**를 쓴다. 우아한형제들이 무료로 배포하는 글꼴이고, **적용까지 끝났다.** CSS 패밀리 이름은 `Jua` 다(아래 라이선스 절 참조).
+
+> **주아체는 어떤 서체인가.** 붓으로 그린 손글씨 간판이 모티브라 **획의 굵기가 일정하지 않고 동글동글하다.** 옛 간판의 푸근함이 있고, 그래서 **제목 한 줄에서 살고 본문에서는 죽는다.**
 
 ```
-font.display = "Sandoll CreamPang", Pretendard, "Pretendard Variable",
+font.display = "Jua", Pretendard, "Pretendard Variable",
                -apple-system, BlinkMacSystemFont, system-ui, "Malgun Gothic", sans-serif
 ```
+
+**라이선스 — SIL Open Font License 1.1.** 폰트 파일이 직접 밝힌다. 공식 배포본 `BMJUA_ttf.ttf`(Version 1.100)의 `name` 테이블에서 읽은 값이다:
+
+| nameID | 값 |
+|---|---|
+| 13 (License) | `This Font Software is licensed under the SIL Open Font License, Version 1.1.` |
+| 0 (Copyright) | `Copyright (c) 2014 WOOWA BROTHERS Corporation(www.woowahan.com) with Reserved Font Name "BM JUA"` |
+
+배포처 <http://font.woowahan.com/jua/>. 우아한형제들 안내문도 같은 취지다 — 영리·비영리 모두 자유롭게 쓰고 수정·재배포할 수 있고, 금지되는 것은 **폰트 파일 자체를 유상으로 판매**하는 일 하나뿐이다. 이 제품은 파일을 팔지 않으므로 제약에 걸리지 않는다.
+
+**패밀리 이름을 `"Jua"`로 쓴다 — `"BM JUA"`가 아니다.** OFL 은 **포맷 변환도 Modified Version 으로 본다**(§1). 웹에서 쓰려면 공식 TTF 를 woff/woff2 로 바꿔야 하는데, Modified Version 은 Reserved Font Name(`BM JUA`)을 내걸 수 없다(§3). 그래서 같은 서체의 Google Fonts 배포본 이름인 **`Jua`**를 CSS 패밀리 이름으로 쓴다.
+
+**파일은 버전 고정된 jsDelivr woff(413KB)를 `@font-face`로 불러온다.** 공식 배포본은 TTF(1.45MB)·OTF(1.24MB) 두 가지뿐이고 plain HTTP 로만 받을 수 있어서, 제목 세 스케일에만 쓰는 서체에 1.45MB 바이너리를 레포에 넣거나 https 페이지에서 http 를 핫링크하는 쪽이 모두 맞지 않았다. Pretendard 도 이미 같은 CDN 에서 받고 있어 오리진이 늘지 않는다.
+
+> **더 나은 선택지가 남아 있다(미적용).** 공식 TTF 를 woff2 로 포맷만 바꾼 **219KB** 자체 호스팅본이면 용량이 절반이고 한글 11,172자를 전부 담으며 외부 CDN 의존도 사라진다. 레포에 바이너리를 넣는 일이라 **사용자 승인이 필요해 이번에는 넣지 않았다.** 넣게 되면 `public/fonts/` 에 woff2 와 OFL 전문(저작권 고지 포함, §2 요건)을 함께 두고 `app.css` 의 `src` 한 줄만 바꾸면 된다.
+
+**굵기 — 주아체는 단일 굵기다.** `@font-face`의 `font-weight`를 `400 700` 범위로 선언한다. 700 을 요청했을 때 브라우저가 **합성 볼드(faux bold)를 만들어 동글동글한 획을 뭉개는 것**을 막으면서, 유틸리티의 `font-weight: 700` 은 살려 둬서 **폰트가 안 뜨면 Pretendard 700 으로 떨어지게** 하기 위해서다. 두 가지를 동시에 지키는 방법은 이 선언뿐이다.
 
 **`font.display`를 쓰는 곳은 셋뿐이다:**
 
@@ -456,9 +476,9 @@ font.display = "Sandoll CreamPang", Pretendard, "Pretendard Variable",
 
 **`title-md` 이하는 전부 Pretendard다** — 본문(`body-lg`·`body-md`), 라벨(`label-lg`·`label-md`), 캡션, 배지, `data-value`, `nav-label`. 여기에는 손대지 않는다.
 
-- **Do** 크림빵을 **제목 한 줄**에만 쓴다. 통통한 레트로 서체라 짧고 큰 글자에서 살고, 여러 줄이 되면 화면이 시끄러워진다.
-- **Don't** 크림빵을 **본문·숫자·배지**에 쓰지 마라 — 획이 굵고 자폭이 균일하지 않아 15px 이하에서 뭉치고, 등폭 숫자(`tnum`)가 없어 `data-value`의 자릿수 정렬이 깨진다. 이 제품의 작은 글씨는 출처와 기준 시점이라 읽히지 않으면 문서 전체의 전제가 무너진다.
-- **파일이 오면 바꾸는 자리는 두 곳뿐이다:** `frontend/app/app.css`의 `@font-face` 주석 자리와 같은 파일의 `--font-display`. 폴백 체인은 그대로 두어 파일이 실패해도 Pretendard로 떨어지게 한다.
+- **Do** 주아체를 **제목 한 줄**에만 쓴다. 둥글고 통통한 손글씨 계열이라 짧고 큰 글자에서 살고, 여러 줄이 되면 화면이 시끄러워진다.
+- **Don't** 주아체를 **본문·숫자·배지**에 쓰지 마라 — 붓글씨라 획의 굵기가 일정하지 않아 15px 이하에서 뭉치고, 등폭 숫자(`tnum`)가 없어 `data-value`의 자릿수 정렬이 깨진다. 이 제품의 작은 글씨는 출처와 기준 시점이라 읽히지 않으면 문서 전체의 전제가 무너진다.
+- **Don't** 주아체에 굵기를 **강제로 올리지 마라.** 단일 굵기라 합성 볼드가 만들어지고, 그게 이 서체의 유일한 장점인 획 대비를 지운다.
 
 - **Display (30/40, 700):** 화면 제목. 한 화면에 한 번. **`font.display`**.
 - **Headline (24/33 · 20/29, 700):** 관광지 이름(상세), 섹션 제목. **`font.display`**.
@@ -703,8 +723,8 @@ font.display = "Sandoll CreamPang", Pretendard, "Pretendard Variable",
 - Don't 카드 안 사진에 카드와 **같은 라운드**를 쓰지 마라. 한 단계 작게.
 - Do 파란색은 **화면당 행동 하나**에만. 정보 강조에 쓰지 않는다.
 - Don't 굵기를 **한 화면에 세 종류 넘게** 쓰지 마라.
-- Do 주요 타이틀 서체(`font.display` — Sandoll 크림빵)는 **`display`·`headline-lg`·`headline-md` 세 스케일에서만** 쓴다.
-- Don't 크림빵을 **본문·숫자·배지**에 쓰지 마라. 통통한 레트로 서체라 작은 글씨에서 뭉치고, 등폭 숫자가 없어 `data-value`의 자릿수가 흔들린다.
+- Do 주요 타이틀 서체(`font.display` — 배달의민족 주아체)는 **`display`·`headline-lg`·`headline-md` 세 스케일에서만** 쓴다.
+- Don't 주아체를 **본문·숫자·배지**에 쓰지 마라. 붓글씨라 작은 글씨에서 뭉치고, 등폭 숫자가 없어 `data-value`의 자릿수가 흔들린다.
 - Do 여백으로 나눈다. 48/24/8, 이 세 값 밖으로 나가지 않는다.
 
 **한국어와 접근성**
@@ -780,7 +800,7 @@ font.display = "Sandoll CreamPang", Pretendard, "Pretendard Variable",
 | 값 | 결정 | 왜 |
 |---|---|---|
 | 본문 서체 `Pretendard` | 확정 | Toss Product Sans는 토스 전용이라 사용 불가. 한글 자소 폭과 시각 보정이 가장 가깝고 OFL이라 공모전 제출에 제약이 없다 |
-| 타이틀 서체 `Sandoll 크림빵` | **결정됐으나 미도입** (2026-09-21) | 주요 타이틀에 쓰기로 결정했지만 **서체 파일·웹폰트 라이선스가 확정 전**이다. 이번에는 토큰·CSS 변수·유틸리티 자리만 만들고 파일과 `@font-face`는 넣지 않았다. 폴백은 Pretendard이고 지금 화면은 폴백으로 렌더된다 — 라이선스가 확정되면 `app.css` 두 곳만 고치면 된다 |
+| 타이틀 서체 `배달의민족 주아체` | 확정·적용 (2026-09-21) | 우아한형제들 무료 배포 글꼴. **폰트 파일의 nameID 13 이 SIL Open Font License 1.1 을 명시**하고 금지는 폰트 파일 유상 판매 하나뿐이라 공모전 제출에 제약이 없다. OFL 은 포맷 변환을 Modified Version 으로 보므로 CSS 패밀리 이름은 Reserved Font Name(`BM JUA`) 대신 **`Jua`**(Google Fonts 배포본 이름)를 쓴다. 공식 배포본이 TTF(1.45MB)·OTF(1.24MB)뿐이라 버전 고정된 jsDelivr woff(413KB)를 `@font-face`로 쓴다. 단일 굵기라 `font-weight: 400 700` 으로 선언해 합성 볼드를 막고 Pretendard 폴백의 700 은 살렸다 |
 | 주 버튼 = `primary-strong` | 확정 (값은 2026-09-21 갱신) | 처음엔 `#3182F6` + 흰 글씨가 3.71:1로 AA 미달이라 **글씨 자리만** 한 단계 진하게 하는 규칙이었다. 포인트 색이 `#014CA9`로 바뀌면서 미달은 사라졌지만(8.05:1) **규칙은 남겼다** — 파란 글씨를 한 값으로 모아야 「화면당 행동 하나」가 지켜진다. 현재 값 `#013B84`, 흰 글씨 10.71:1 |
 | `혼잡` 배지 = 한산만 강조 | 확정 | 신호등 3색은 절대적 좋고 나쁨의 문법이라 "초록인 곳으로 가자"를 유발한다 — ADR-0002가 막으려는 장소 간 비교가 그대로 생긴다 |
 | 도로 `서행` `#FF9200` | 확정 | 원활–서행–정체는 도로 소통의 관습 문법. 배지가 아니라 8px 점이라 다른 신호와 형태가 달라 섞이지 않는다 |
@@ -800,7 +820,7 @@ font.display = "Sandoll CreamPang", Pretendard, "Pretendard Variable",
 
 - **2026-09-21** — **포인트 색을 `#014CA9`로 바꿨다**(사용자 결정 2026-09-21). 파랑 5단계를 같은 색상(H 213.2°)·같은 채도에서 명도만 내려 다시 설계했다: `primary #3182F6 → #014CA9` · `primary-strong #1B64DA → #013B84` · `primary-deep #194AA6 → #012B60` · `primary-surface #E8F3FF → #E1EEFF` · `primary-soft #90C2FF → #4899FE`. 대비가 전 구간에서 올라갔고(흰 배경 위 `primary` 3.71 → **8.05:1**, 주 버튼 흰 글씨 5.41 → **10.71:1**, `primary-surface` 위 `primary-strong` 4.82 → **9.12:1**) 요건 세 줄을 모두 통과한다 — 「측정 근거 › 포인트 색 재설계」에 수치 표를 새로 뒀다. **파랑이 "검증된 것"의 색이라는 뜻과 컴포넌트별 배정은 바꾸지 않았다.** `#3182F6`은 대비 미달 때문에 글씨가 금지됐었는데 그 이유가 사라져, `primary`도 글씨로 쓸 수 있지만 「화면당 행동 하나」를 위해 파란 글씨를 `primary-strong` 하나로 모으는 규칙은 남겼다. 지도 램프(`map-region-fill-*`)는 방문 규모 단계 색이라 재설계하지 않고 포인트 색 토큰에서 파생되는 관계를 그대로 뒀으며, 그 결과 3단·4단이 전보다 가까워진 것(명도 차 9.8 → 7.3%p)을 `map` 절에 주의로 적었다. 「토스 블루는 그대로 쓴다」는 옛 문장은 이 결정으로 폐기했다. 타이포·라운드·여백·그림자 토큰은 변경 없음.
 
-- **2026-09-21** — **주요 타이틀 서체 자리를 만들었다**(사용자 결정 2026-09-21). front matter에 `font.display` 토큰을 새로 두고 `display`·`headline-lg`·`headline-md` 세 스케일의 `fontFamily`를 `"{font.display}"`로 바꿨다. 값은 `"Sandoll CreamPang", Pretendard, …`. **서체 파일·웹폰트 라이선스가 확정되기 전이라 실제 파일도 `@font-face`도 넣지 않았고, 지금 화면은 폴백인 Pretendard로 렌더된다** — `app.css`에 `--font-display` 변수와 `@font-face` 주석 자리를 뒀고, 파일이 오면 그 두 곳만 고치면 된다. `title-md` 이하(본문·라벨·배지·캡션·`data-value`·`nav-label`)는 Pretendard 그대로이고, 크림빵을 본문·숫자·배지에 쓰지 않는다는 Do/Don't를 더했다. 크기·행간·굵기·색 토큰은 변경 없음. `WIREFRAME.md`는 구조 문서라 영향 없음(확인함).
+- **2026-09-21** — **주요 타이틀에 배달의민족 주아체를 적용했다**(사용자 결정 2026-09-21). front matter에 `font.display` 토큰을 새로 두고 `display`·`headline-lg`·`headline-md` 세 스케일의 `fontFamily`를 `"{font.display}"`로 바꿨다. 값은 `"Jua", Pretendard, …`. 라이선스는 **SIL Open Font License 1.1** 이다 — 공식 배포본 `BMJUA_ttf.ttf`(Version 1.100)의 `name` 테이블 nameID 13 이 직접 밝히고 있고, 저작권은 nameID 0 `Copyright (c) 2014 WOOWA BROTHERS Corporation(www.woowahan.com) with Reserved Font Name "BM JUA"` 다(배포처 <http://font.woowahan.com/jua/>). **패밀리 이름은 `Jua`** 로 썼다 — OFL 은 포맷 변환도 Modified Version 으로 보므로(§1) 변환본은 Reserved Font Name 을 못 쓴다(§3). 공식 배포본이 TTF(1.45MB)·OTF(1.24MB)뿐이고 plain HTTP 로만 받을 수 있어, 버전 고정된 jsDelivr woff(413KB)를 `app.css` 의 `@font-face` 로 불러온다(`font-display: swap`). **단일 굵기 서체라 `font-weight: 400 700` 범위로 선언해** 합성 볼드를 막고, 유틸리티의 `font-weight: 700` 은 남겨 폰트가 안 뜰 때 Pretendard 700 으로 떨어지게 했다. 219KB 자체 호스팅 woff2 로 옮기는 개선이 남아 있으나 레포에 바이너리를 넣는 일이라 사용자 승인 대기다. `title-md` 이하(본문·라벨·배지·캡션·`data-value`·`nav-label`)는 Pretendard 그대로이고, 주아체를 본문·숫자·배지에 쓰지 않는다는 Do/Don't를 더했다. 크기·행간·색 토큰은 변경 없음. `WIREFRAME.md`는 구조 문서라 영향 없음(확인함).
 
 ---
 
