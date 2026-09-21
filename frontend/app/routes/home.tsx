@@ -597,13 +597,20 @@ function DroppedConditionNotice({
  * 온라인 언급 미산정 구역의 머리 (#27, U17 · D7).
  *
  * 이 아래 장소들은 **낮은 관심도가 아니라 값이 없는 것**이다. 순위 안에 섞어 두면
- * 꼴찌로 읽히므로 선을 그어 구역을 가른다. 왜 순위에 넣지 않았는지는 도움말이 말한다.
+ * 꼴찌로 읽히므로 선을 그어 구역을 가른다. 경계를 정하는 규칙은 그대로다 (`unranked`).
+ *
+ * 문구만 바뀌었다 (#49). 전에는 `온라인 언급 정보 없음 N곳`이었는데, 카드에서 언급량을
+ * 걷어낸 뒤로는 화면 어디에도 없는 그 숫자를 divider 가 혼자 아쉬워하는 꼴이 됐다.
+ * 지금 문구는 **사용자가 보고 있는 것**(순서)으로 말하고, 정렬이 적용되지 않았을 때
+ * 시트 헤더가 쓰는 말(`순서를 매기지 않았어요`)과 같은 어휘를 쓴다. `순위 밖`이라고
+ * 줄이지 않은 이유는 그것이 정확히 #27이 막으려는 오해(`낮은 순위`)이기 때문이다.
+ * 왜 순서를 매기지 못했는지는 도움말이 말한다.
  */
 function UnrankedDivider({ count }: { count: number }) {
   return (
     <div className="mb-6 flex items-center gap-3">
       <span className="h-px grow bg-grey-200" aria-hidden="true" />
-      <span className="type-label-md shrink-0 text-grey-700">온라인 언급 정보 없음 {count}곳</span>
+      <span className="type-label-md shrink-0 text-grey-700">순서를 매기지 못한 {count}곳</span>
       <span className="h-px grow bg-grey-200" aria-hidden="true" />
     </div>
   );

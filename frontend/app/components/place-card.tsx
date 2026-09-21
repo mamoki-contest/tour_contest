@@ -1,17 +1,26 @@
 import { Link } from "react-router";
 
+import { cardFacts } from "../lib/card-facts";
 import type { Place, RelatedPlace } from "../lib/contract";
 import type { DateMode } from "../lib/explore-params";
-import { formatObservedAtShort } from "../lib/format";
-import { formatStatusCaption, isStale } from "../lib/data-status";
-import { placeSignals } from "../lib/place-signals";
-import { FactBadge, NoDataBadge, StaleBadge } from "./badges";
+import { formatStatusCaption } from "../lib/data-status";
+import { FactBadge } from "./badges";
 import { CrowdBadge, NoForecastBadge, QuietDateValue } from "./crowd-badge";
 
 /**
  * 관광지 카드 — 이 제품의 기본 단위.
- * 구성 순서가 고정이다: 사진 → 이름(2줄) → 주소(1줄) → 배지 한 줄 → 신호 셋 → 기준 시점 캡션.
- * 캡션은 마지막이고, 공급자 이름 없이 기준 시점만 적는다 (#35).
+ *
+ * 구성이 고정이다: **사진 → 이름(2줄) → 주소(1줄) → 분류 태그**. 날짜 조건이 걸렸을
+ * 때만 여기에 예측 배지 하나가 붙는다 (#49).
+ *
+ * 전에는 여기에 신호 세 줄(언급량·TMAP·입장객)과 없음 배지 여섯 종, 중심관광지 순위,
+ * 기준 시점 캡션이 함께 섰다. 그 값들은 여전히 응답에 오고 **정렬과 상세가 계속
+ * 쓴다** — 화면에서만 뺐다. 목록에서 사용자가 하는 일은 어디를 눌러 볼지 고르는
+ * 것이고, 카드 한 장이 여섯 줄이 되면 그 판단이 느려진다. 근거를 확인하는 자리는
+ * 상세다.
+ *
+ * 무엇이 그려지는지는 이 컴포넌트가 아니라 `cardFacts` 가 정한다 — 규칙을 순수
+ * 함수 한 곳에 모아야 테스트가 조합을 고정할 수 있다.
  */
 export function PlaceCard({
   place,
@@ -33,8 +42,7 @@ export function PlaceCard({
   dateMode?: DateMode;
   saveButton?: React.ReactNode;
 }) {
-  const rank = place.regionCenterRank;
-  const forecast = place.forecast;
+  const facts = cardFacts(place, dateMode);
 
   return (
     // `min-w-0` — 목록이 격자라서, 이것이 없으면 칸의 자동 최소 크기가 카드의
@@ -44,9 +52,9 @@ export function PlaceCard({
       {saveButton ? <div className="absolute top-6 right-6 z-10">{saveButton}</div> : null}
 
       <Link to={href} className="block rounded-lg transition-colors duration-200 hover:bg-grey-50">
-        {place.photoUrl ? (
+        {facts.photoUrl ? (
           <img
-            src={place.photoUrl}
+            src={facts.photoUrl}
             alt=""
             loading="lazy"
             className="mb-2 aspect-[4/3] w-full rounded-lg object-cover"
@@ -57,75 +65,36 @@ export function PlaceCard({
           </div>
         )}
 
-        <h3 className="type-title-md line-clamp-2 text-grey-900">{place.name}</h3>
+        <h3 className="type-title-md line-clamp-2 text-grey-900">{facts.name}</h3>
 
         <p className="type-body-md mt-2 truncate text-grey-600">
-          {place.address ?? "주소 정보 없음"}
+          {facts.address ?? "주소 정보 없음"}
         </p>
       </Link>
 
       {/*
-        날짜 모드가 무엇을 보여줄지 정한다.
-        고정: 선택일의 이 장소 기준 수준 · 유연: 이 장소의 한산 예상일.
-        어느 쪽도 없으면 자리를 비우지 않고 `예측 정보 없음`이 온다.
+        날짜 유연 모드의 한산 예상일은 배지가 아니라 값이다 — 날짜 자체가 정보라서
+        한 줄을 쓴다. 날짜 조건이 없으면(=배지가 null) 이 자리는 아예 생기지 않는다.
       */}
-      {dateMode === "FLEXIBLE" && forecast.quietDate ? (
+      {facts.dateBadge?.kind === "QUIET_DATE" ? (
         <div className="mt-2">
-          <QuietDateValue date={forecast.quietDate} />
+          <QuietDateValue date={facts.dateBadge.date} />
           <p className="type-caption text-grey-600">이 장소에서 한산할 것으로 보이는 날이에요</p>
         </div>
       ) : null}
 
-      <div className="mt-2 flex flex-wrap gap-2">
-        {place.category ? <FactBadge>{place.category}</FactBadge> : null}
-
-        {dateMode === "FIXED" ? (
-          forecast.selectedDateLevel ? (
-            <CrowdBadge level={forecast.selectedDateLevel} />
-          ) : (
-            <NoForecastBadge />
-          )
-        ) : forecast.quietDate === null ? (
-          <NoForecastBadge />
-        ) : null}
-
-        {/*
-          예측이 최종 정상 데이터로 왔으면 그 사실을 배지로 말한다 (#21).
-          갓 받은 예측과 며칠 묵은 예측이 같은 `한산`으로 보이면 헛걸음이 된다.
-        */}
-        {isStale(forecast.status) ? <StaleBadge>최근 저장된 예측</StaleBadge> : null}
-
-        {rank.value !== null ? (
-          <FactBadge>시·군 중심관광지 {rank.value}위</FactBadge>
-        ) : (
-          <NoDataBadge>중심관광지 순위 미산정</NoDataBadge>
-        )}
-      </div>
-
       {/*
-        장소 발견 신호 셋 — 온라인 언급량 · TMAP 검색순위 · 입장객 수.
-        **각각 제 줄에 제 기준 시점과 함께** 선다. 합치지 않고, 어느 하나가 다른 하나의
-        결측을 대신하지도 않는다 (PRD v4 §신호 결합). 없는 신호도 자리를 비우지 않는다.
+        배지 줄은 분류 태그 하나로 시작한다. 날짜 확정 모드에서만 그 옆에 예측 배지가
+        하나 더 붙고, 예측이 없는 장소는 **자리를 비운다** — 점선 `예측 정보 없음`을
+        두지 않는다. 카드에 배지가 둘뿐이라 빈자리가 `보통`으로도 `한산`으로도 읽히지
+        않는다(`보통`은 늘 글자로 적히고, `한산`은 유일하게 색을 쓴다).
       */}
-      <ul className="mt-2 space-y-1">
-        {placeSignals(place).map((signal) => (
-          <li key={signal.key}>
-            {signal.kind === "value" ? (
-              <p className="type-body-md text-grey-800">
-                {signal.value}
-                {signal.basis ? (
-                  <span className="type-caption text-grey-600"> · {signal.basis}</span>
-                ) : null}
-              </p>
-            ) : (
-              <NoDataBadge>{signal.label}</NoDataBadge>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {/* 카드 캡션은 기준 시점 한 줄이다 — 공급자 이름은 화면에 적지 않는다 (#35). */}
-      <p className="type-caption mt-2 text-grey-600">{formatObservedAtShort(rank.observedAt)}</p>
+      {facts.category || facts.dateBadge?.kind === "LEVEL" ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {facts.category ? <FactBadge>{facts.category}</FactBadge> : null}
+          {facts.dateBadge?.kind === "LEVEL" ? <CrowdBadge level={facts.dateBadge.level} /> : null}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -137,14 +106,17 @@ export function PlaceCardSkeleton() {
       <div className="mb-2 aspect-[4/3] w-full rounded-lg bg-grey-100" />
       <div className="h-[25.5px] w-2/3 rounded-sm bg-grey-100" />
       <div className="mt-2 h-[22.5px] w-1/2 rounded-sm bg-grey-100" />
+      {/* 카드가 줄어든 만큼 스켈레톤도 줄인다 — 자리표가 실물보다 길면 목록이 한 번 튄다. */}
       <div className="mt-2 h-[27.5px] w-24 rounded-sm bg-grey-100" />
-      <div className="mt-2 h-[19.5px] w-3/4 rounded-sm bg-grey-100" />
     </div>
   );
 }
 
 /**
  * 연관 장소 카드 — 대체지 후보와 함께 가기 좋은 곳이 함께 쓴다.
+ *
+ * **상세 화면의 카드라 #49의 축소 대상이 아니다.** 목록 카드는 훑는 자리지만 이곳은
+ * 이미 한 장소를 열어 본 사람이 근거를 읽는 자리다.
  *
  * **링크가 아니다.** 공급자 연관 목록에는 표준 관광지 식별자가 없어 상세로 갈 수
  * 없다. 눌리지 않는 카드를 누를 수 있어 보이게 만들지 않는다.
