@@ -41,6 +41,7 @@ import {
   type OpenSheet,
   type SheetSnap,
 } from "../lib/explore-params";
+import { exploreDetailHref } from "../lib/back-link";
 import { formatBaselineCaption, formatStaleCaption, isStale } from "../lib/data-status";
 import { useHelpSeen } from "../lib/use-help-seen";
 import { isListQueryNavigation, isPageNavigation } from "../lib/list-loading";
@@ -392,6 +393,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   ) : null}
                   <PlaceCard
                     place={place}
+                    // 지금 걸린 탐색 조건을 상세로 들고 간다 — 거기서 돌아올 길이 된다 (#42).
+                    href={exploreDetailHref(place.placeId, state)}
                     dateMode={state.dateMode}
                     saveButton={
                       <SaveButton

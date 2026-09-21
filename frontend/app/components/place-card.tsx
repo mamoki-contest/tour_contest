@@ -15,11 +15,21 @@ import { CrowdBadge, NoForecastBadge, QuietDateValue } from "./crowd-badge";
  */
 export function PlaceCard({
   place,
+  href,
   dateMode = "FLEXIBLE",
   /** 저장 버튼. 카드 탭 영역과 겹치지 않게 별도 레이어로 얹는다 (U13). */
   saveButton,
 }: {
   place: Place;
+  /**
+   * 상세로 가는 주소 (#42).
+   *
+   * 카드가 스스로 만들지 않는다 — **어디서 눌린 카드인지**에 따라 상세가 돌아갈
+   * 자리가 다르고(탐색 홈의 조건 / 나만의 지도), 그 사정은 부모만 안다.
+   * 기본값을 두지 않는 것도 같은 이유다: 조건 없는 주소가 조용히 새어 나가면
+   * 상세의 `← 뒤로`가 다시 제자리를 잃는다.
+   */
+  href: string;
   dateMode?: DateMode;
   saveButton?: React.ReactNode;
 }) {
@@ -31,10 +41,7 @@ export function PlaceCard({
       {/* 저장 버튼의 40px 타깃을 카드 링크 밖에 둔다 — 저장과 상세 이동이 충돌하지 않게. */}
       {saveButton ? <div className="absolute top-6 right-6 z-10">{saveButton}</div> : null}
 
-      <Link
-        to={`/places/${encodeURIComponent(place.placeId)}`}
-        className="block rounded-lg transition-colors duration-200 hover:bg-grey-50"
-      >
+      <Link to={href} className="block rounded-lg transition-colors duration-200 hover:bg-grey-50">
         {place.photoUrl ? (
           <img
             src={place.photoUrl}

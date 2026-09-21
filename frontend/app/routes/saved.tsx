@@ -7,7 +7,7 @@ import { HelpSheet } from "../components/help-sheet";
 import { SaveEditSheet } from "../components/save-controls";
 import { ErrorState, SecondaryButton } from "../components/states";
 import { useCollection } from "../lib/use-collection";
-import { shouldUseHistoryBack } from "../lib/back-link";
+import { savedDetailHref, shouldUseHistoryBack } from "../lib/back-link";
 import { closeSheetSearch, openSheetSearch } from "../lib/sheet-link";
 import { useHelpSeen } from "../lib/use-help-seen";
 import type { CollectionItemStatus } from "../lib/contract";
@@ -134,10 +134,11 @@ export default function SavedRoute({ loaderData }: Route.ComponentProps) {
                   {visible.map((place) => (
                     <li key={place.placeId}>
                       <article className="rounded-xl bg-surface p-4">
-                        <Link
-                          to={`/places/${encodeURIComponent(place.placeId)}`}
-                          className="block rounded-lg"
-                        >
+                        {/*
+                          어디서 온 카드인지 주소에 적어 둔다 (#42) — 상세의 `← 뒤로`가
+                          탐색 홈이 아니라 이 목록을 가리켜야 한다.
+                        */}
+                        <Link to={savedDetailHref(place.placeId)} className="block rounded-lg">
                           <h3 className="type-title-md line-clamp-2 text-grey-900">{place.name}</h3>
                           <p className="type-body-md mt-2 truncate text-grey-600">
                             {place.address ?? "주소 정보 없음"}
