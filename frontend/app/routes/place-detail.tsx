@@ -1,15 +1,19 @@
+import { useCallback } from "react";
 import { Link, useLocation, useNavigate, useRevalidator, useSearchParams } from "react-router";
 
 import type { Route } from "./+types/place-detail";
 import type { RelatedPlacesGroup } from "../lib/contract";
 import { BottomNav } from "../components/bottom-nav";
 import { ForecastGrid } from "../components/forecast-grid";
+import { HelpSheet } from "../components/help-sheet";
 import { RelatedPlaceCard } from "../components/place-card";
 import { useCollection } from "../lib/use-collection";
 import { CurrentAccessSection } from "../components/road-status";
 import { DataNote, EmptyState, ErrorState, SecondaryButton } from "../components/states";
 import { backHref, shouldUseHistoryBack } from "../lib/back-link";
 import { parseExploreState } from "../lib/explore-params";
+import { useHelpSeen } from "../lib/use-help-seen";
+import { closeSheetSearch, openSheetSearch } from "../lib/sheet-link";
 import { fetchPlaceDetail } from "../lib/place-detail.server";
 import { formatStatusCaption } from "../lib/data-status";
 
@@ -35,11 +39,34 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
   const { detail, error } = loaderData;
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   // 탐색에서 들고 온 날짜 조건을 상세에서도 그대로 쓴다 — 조건이 화면마다 달라지지 않게.
   const state = parseExploreState(searchParams);
   const collection = useCollection();
   const revalidator = useRevalidator();
   const saved = detail ? collection.isSaved(detail.placeId) : false;
+
+  /*
+   * 도움말은 이 화면에서 연다 (#41).
+   *
+   * 전에는 ⓘ 가 탐색 홈(`/?sheet=help`)으로 보내는 링크였다. 설명을 읽으러 눌렀을
+   * 뿐인데 보던 관광지를 잃었고, 도움말을 다 읽어도 `아직 안 봤음` 표시는 그대로
+   * 남았다 — 기록이 탐색 홈의 클릭 핸들러에만 있었기 때문이다. 열림 상태를 주소에
+   * 두고 그 상태를 보고 기록하면 두 가지가 함께 풀린다.
+   */
+  const helpOpen = state.sheet === "help";
+  useHelpSeen(helpOpen);
+
+  const closeHelp = useCallback(() => {
+    // 앱 안에서 열었으면 히스토리 한 겹이 곧 시트 한 겹이다 (U9).
+    if (shouldUseHistoryBack(window.history.state)) {
+      navigate(-1);
+      return;
+    }
+    // 주소를 직접 쳐서 열린 첫 진입은 되돌릴 자리가 없다 — 시트만 지운다.
+    navigate({ search: closeSheetSearch(location.search) }, { replace: true });
+  }, [navigate, location.search]);
 
   if (error || !detail) {
     return (
@@ -71,6 +98,8 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
 
         {/* 하단 내비는 모든 화면에서 살아 있다 — 오류 화면도 막다른 길이 아니다. */}
         <BottomNav savedCount={collection.snapshot.places.length} />
+
+        {helpOpen ? <HelpSheet onClose={closeHelp} /> : null}
       </>
     );
   }
@@ -80,7 +109,7 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
       <main className="mx-auto min-h-dvh max-w-[1024px] px-gutter pb-32">
       <div className="sticky top-0 z-10 -mx-gutter flex items-center justify-between gap-4 bg-grey-50/95 px-gutter py-3 backdrop-blur">
         <BackLink />
-        <HelpLink />
+        <HelpLink search={location.search} />
       </div>
 
       {detail.photoUrl ? (
@@ -167,6 +196,9 @@ export default function PlaceDetailRoute({ loaderData }: Route.ComponentProps) {
       </div>
 
       <BottomNav savedCount={collection.snapshot.places.length} />
+
+      {/* 도움말은 어느 화면에서 열어도 같은 내용이다 — 설명이 모이는 한 자리다 (#35). */}
+      {helpOpen ? <HelpSheet onClose={closeHelp} /> : null}
     </>
   );
 }
@@ -203,10 +235,18 @@ function BackLink() {
   );
 }
 
-/** 신호가 무엇을 세는 값인지는 도움말 한 자리에 모았다 (#35). */
-function HelpLink() {
+/**
+ * 신호가 무엇을 세는 값인지는 도움말 한 자리에 모았다 (#35).
+ *
+ * 이 화면을 떠나지 않고 연다 (#41) — 보던 관광지와 들고 온 탐색 조건을 그대로 둔
+ * 채 시트 한 겹만 얹는다. 링크라 히스토리를 쌓으므로 뒤로가기가 그 겹을 닫는다 (U9).
+ */
+function HelpLink({ search }: { search: string }) {
   return (
-    <Link to="/?sheet=help" className="type-label-md text-primary-strong">
+    <Link
+      to={{ search: openSheetSearch(search, "help") }}
+      className="type-label-md text-primary-strong"
+    >
       ⓘ 이 화면의 정보들
     </Link>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Link,
   useLocation,
@@ -41,8 +41,9 @@ import {
   type OpenSheet,
   type SheetSnap,
 } from "../lib/explore-params";
+import { exploreDetailHref } from "../lib/back-link";
 import { formatBaselineCaption, formatStaleCaption, isStale } from "../lib/data-status";
-import { readHelpSeen, markHelpSeen } from "../lib/help-seen";
+import { useHelpSeen } from "../lib/use-help-seen";
 import { isListQueryNavigation, isPageNavigation } from "../lib/list-loading";
 import { listHeading } from "../lib/list-heading";
 import { normalizedTheme, searchNotice } from "../lib/search-notice";
@@ -205,11 +206,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   /*
    * 도움말을 이미 봤는지 (#35, WIREFRAME R1).
    *
-   * 서버는 이 값을 알 수 없으므로 첫 렌더는 `봤다`로 시작한다 — 반대로 두면 하이드레이션
-   * 직후 점이 한 번 깜빡였다가 사라진다.
+   * 기록은 ⓘ 를 누른 순간이 아니라 **도움말이 열린 상태**에서 일어난다 (#41) —
+   * 다른 화면의 ⓘ 링크로 열어도, 주소를 직접 쳐서 들어와도 같은 사실이다.
    */
-  const [helpSeen, setHelpSeen] = useState(true);
-  useEffect(() => setHelpSeen(readHelpSeen()), []);
+  const helpSeen = useHelpSeen(state.sheet === "help");
 
   const searchThisArea = useCallback(
     (bounds: MapBounds) => {
@@ -248,11 +248,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     [navigate],
   );
 
-  const openHelp = useCallback(() => {
-    markHelpSeen();
-    setHelpSeen(true);
-    openSheet("help");
-  }, [openSheet]);
+  // 여는 일만 한다 — `봤다`는 기록은 열린 상태를 보는 쪽이 맡는다 (#41).
+  const openHelp = useCallback(() => openSheet("help"), [openSheet]);
 
   /** 시트가 확정한 조건은 열림 상태를 지우고 적용한다 — 시트가 닫히면서 결과가 보인다. */
   const applyFromSheet = useCallback(
@@ -396,6 +393,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   ) : null}
                   <PlaceCard
                     place={place}
+                    // 지금 걸린 탐색 조건을 상세로 들고 간다 — 거기서 돌아올 길이 된다 (#42).
+                    href={exploreDetailHref(place.placeId, state)}
                     dateMode={state.dateMode}
                     saveButton={
                       <SaveButton

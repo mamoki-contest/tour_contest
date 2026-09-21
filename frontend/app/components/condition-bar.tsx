@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 
+import { searchConditionChip } from "../lib/condition-chip";
 import {
   DEFAULT_EXPLORE_STATE,
   exploreHref,
@@ -39,8 +40,7 @@ export function ConditionBar({
   /** 날짜 시트를 여는 동작. 없으면 마찬가지로 상태 표시로 남는다. */
   onOpenDate?: () => void;
 }) {
-  const themeLabel =
-    state.theme ?? normalizedTheme ?? (state.query ? `'${state.query}' 검색` : "무테마");
+  const searchChip = searchConditionChip(state.theme ?? normalizedTheme, state.query);
   const dateLabel =
     state.dateMode === "FIXED" && state.date ? formatChipDate(state.date) : "날짜 미정";
   const sortLabel = state.sort === "MENTION_DESC" ? "온라인 언급 많은 순" : "온라인 언급 적은 순";
@@ -53,7 +53,7 @@ export function ConditionBar({
         label="탐색 범위"
         value={regionLabel ?? (state.bounds ? "이 지도 범위" : "강원 전체")}
       />
-      <ConditionChip onClick={onOpenSearch} label="테마" value={themeLabel} />
+      <ConditionChip onClick={onOpenSearch} label={searchChip.label} value={searchChip.value} />
       <ConditionChip onClick={onOpenDate} label="날짜" value={dateLabel} />
       {/* 정렬은 시트가 아니라 시트 헤더의 토글이 주인이다. 칩은 현재 값만 말한다. */}
       <ConditionChip label="정렬" value={sortLabel} />

@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useFetcher, useLocation, useNavigate } from "react-router";
 
 import type { Route } from "./+types/saved";
 import { BottomNav } from "../components/bottom-nav";
+import { HelpSheet } from "../components/help-sheet";
 import { SaveEditSheet } from "../components/save-controls";
 import { ErrorState, SecondaryButton } from "../components/states";
 import { useCollection } from "../lib/use-collection";
+import { savedDetailHref, shouldUseHistoryBack } from "../lib/back-link";
+import { closeSheetSearch, openSheetSearch } from "../lib/sheet-link";
+import { useHelpSeen } from "../lib/use-help-seen";
 import type { CollectionItemStatus } from "../lib/contract";
 import type { SavedPlace } from "../lib/personal-collection";
 import { NoDataBadge } from "../components/badges";
@@ -36,6 +40,23 @@ export default function SavedRoute({ loaderData }: Route.ComponentProps) {
   const [editing, setEditing] = useState<SavedPlace | null>(null);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const freshness = useFreshness(snapshot.places.map((place) => place.placeId));
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  /*
+   * 도움말은 이 화면에서 연다 (#41). 탐색 홈으로 보내던 링크는 저장 목록을 떠나게
+   * 했고, 그 길로 도움말을 다 읽어도 `아직 안 봤음` 표시가 남았다.
+   */
+  const helpOpen = new URLSearchParams(location.search).get("sheet") === "help";
+  useHelpSeen(helpOpen);
+
+  const closeHelp = useCallback(() => {
+    if (shouldUseHistoryBack(window.history.state)) {
+      navigate(-1);
+      return;
+    }
+    navigate({ search: closeSheetSearch(location.search) }, { replace: true });
+  }, [navigate, location.search]);
 
   const allTags = [...new Set(snapshot.places.flatMap((place) => place.tags))];
   const visible = tagFilter
@@ -83,8 +104,11 @@ export default function SavedRoute({ loaderData }: Route.ComponentProps) {
                   <h2 className="type-headline-md text-grey-800">
                     저장한 곳 {snapshot.places.length}곳
                   </h2>
-                  {/* 보관 위치 설명은 도움말 한 자리에 모았다 (#35). */}
-                  <Link to="/?sheet=help" className="type-label-md text-primary-strong">
+                  {/* 보관 위치 설명은 도움말 한 자리에 모았다 (#35). 이 화면을 떠나지 않는다 (#41). */}
+                  <Link
+                    to={{ search: openSheetSearch(location.search, "help") }}
+                    className="type-label-md text-primary-strong"
+                  >
                     ⓘ 저장한 곳은 어디에 남나요
                   </Link>
                 </div>
@@ -110,10 +134,11 @@ export default function SavedRoute({ loaderData }: Route.ComponentProps) {
                   {visible.map((place) => (
                     <li key={place.placeId}>
                       <article className="rounded-xl bg-surface p-4">
-                        <Link
-                          to={`/places/${encodeURIComponent(place.placeId)}`}
-                          className="block rounded-lg"
-                        >
+                        {/*
+                          어디서 온 카드인지 주소에 적어 둔다 (#42) — 상세의 `← 뒤로`가
+                          탐색 홈이 아니라 이 목록을 가리켜야 한다.
+                        */}
+                        <Link to={savedDetailHref(place.placeId)} className="block rounded-lg">
                           <h3 className="type-title-md line-clamp-2 text-grey-900">{place.name}</h3>
                           <p className="type-body-md mt-2 truncate text-grey-600">
                             {place.address ?? "주소 정보 없음"}
@@ -182,6 +207,8 @@ export default function SavedRoute({ loaderData }: Route.ComponentProps) {
           }}
         />
       ) : null}
+
+      {helpOpen ? <HelpSheet onClose={closeHelp} /> : null}
     </>
   );
 }
