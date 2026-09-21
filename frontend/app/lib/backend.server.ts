@@ -1,4 +1,17 @@
-import type { CrowdLevel, DataStatus, Place, PlaceForecastSummary, Sourced } from "./contract";
+import type {
+  CrowdLevel,
+  DataStatus,
+  OnlineMention,
+  OnlineMentionStatus,
+  Place,
+  PlaceForecastSummary,
+  Sourced,
+  TmapRank,
+  TmapRankStatus,
+  VisitorCountStatus,
+  VisitorStats,
+  VisitorStatsStatus,
+} from "./contract";
 
 /**
  * 한사나다 백엔드(`/api/v1/**`) 경계. 서버(로더)에서만 실행된다.
@@ -115,14 +128,23 @@ export interface BackendAttraction {
   centerRank?: number | null;
   baseAt?: string | null;
   onlineMention?: {
-    status?: "COLLECTED" | "AMBIGUOUS" | "UNAVAILABLE" | "COLLECTION_FAILED" | null;
+    status?: string | null;
     count?: number | null;
     collectedAt?: string | null;
     ruleVersion?: string | null;
     sortable?: boolean | null;
   } | null;
-  tmapRank?: { status?: "AVAILABLE" | "NOT_AVAILABLE" | null; rank?: number | null; period?: string | null } | null;
-  visitorStats?: { status?: string | null; count?: number | null; period?: string | null } | null;
+  tmapRank?: {
+    status?: string | null;
+    rank?: number | null;
+    period?: string | null;
+  } | null;
+  visitorStats?: {
+    status?: string | null;
+    count?: number | null;
+    period?: string | null;
+    countStatus?: string | null;
+  } | null;
   visitTiming?: BackendVisitTiming | null;
 }
 
@@ -203,20 +225,74 @@ export function toForecastSummary(timing: BackendVisitTiming | null | undefined)
 }
 
 /**
- * 관광지 관심도 — 정렬이 쓰는 값. 백엔드의 **온라인 언급량**이다.
+ * 온라인 언급량 — 목록 정렬이 쓰는 값.
  *
  * `AMBIGUOUS`(이름이 모호해 집계 불가)와 `COLLECTION_FAILED` 를 0 으로 읽지 않는다.
- * 둘 다 값이 없다는 뜻이고, 낮은 관심도가 아니다 (ADR-0006).
+ * 둘 다 값이 없다는 뜻이고, 낮은 언급량이 아니다 (ADR-0006, PRD v4 §온라인 언급량).
+ * **상태를 뭉개지도 않는다** — 화면은 넷을 서로 다른 문구로 말한다.
  */
-function toInterest(attraction: BackendAttraction): Sourced<number> {
+const MENTION_STATUSES: OnlineMentionStatus[] = [
+  "COLLECTED",
+  "AMBIGUOUS",
+  "UNAVAILABLE",
+  "COLLECTION_FAILED",
+];
+
+function toOnlineMention(attraction: BackendAttraction): OnlineMention {
   const mention = attraction.onlineMention;
-  const count = mention?.status === "COLLECTED" ? num(mention.count) : null;
+  const raw = text(mention?.status);
+  /*
+   * 모르는 상태와 상태가 통째로 없는 응답은 `COLLECTION_FAILED` 로 읽는다 — 백엔드가
+   * 활성 스냅샷에 그 장소의 행이 없을 때 쓰는 값과 같다. 정상 수집으로 낙관하지 않는다.
+   */
+  const declared = MENTION_STATUSES.includes(raw as OnlineMentionStatus)
+    ? (raw as OnlineMentionStatus)
+    : "COLLECTION_FAILED";
+  const count = declared === "COLLECTED" ? num(mention?.count) : null;
 
   return {
-    value: count,
-    status: count === null ? "MISSING" : "OK",
-    source: count === null ? null : "온라인 언급량",
-    observedAt: text(mention?.collectedAt),
+    // 정상 수집이라면서 수치가 없으면 그 장소의 언급량을 아는 것이 아니다.
+    status: declared === "COLLECTED" && count === null ? "COLLECTION_FAILED" : declared,
+    count,
+    collectedAt: text(mention?.collectedAt),
+    ruleVersion: text(mention?.ruleVersion),
+  };
+}
+
+/** 시·군 내 TMAP 검색순위. 수록되지 않은 장소를 꼴찌나 0위로 만들지 않는다. */
+function toTmapRank(attraction: BackendAttraction): TmapRank {
+  const tmap = attraction.tmapRank;
+  const rank = text(tmap?.status) === "AVAILABLE" ? num(tmap?.rank) : null;
+  const status: TmapRankStatus = rank === null ? "NOT_AVAILABLE" : "AVAILABLE";
+
+  return { status, rank, period: rank === null ? null : text(tmap?.period) };
+}
+
+const VISITOR_COUNT_STATUSES: VisitorCountStatus[] = ["PROVISIONAL", "CONFIRMED"];
+
+/**
+ * 주요관광지점 입장객 통계.
+ *
+ * `NOT_REGISTERED`(통계에 없거나 그 달에 집계되지 않음)와 `NOT_IMPORTED`(통계 파일을
+ * 아직 적재하지 않음)를 한 문구로 뭉개지 않는다. 앞은 확인해 봤다는 말이고 뒤는
+ * 확인해 본 적이 없다는 말이다.
+ */
+function toVisitorStats(attraction: BackendAttraction): VisitorStats {
+  const stats = attraction.visitorStats;
+  const declared = text(stats?.status);
+  const count = declared === "AVAILABLE" ? num(stats?.count) : null;
+  const status: VisitorStatsStatus =
+    count !== null ? "AVAILABLE" : declared === "NOT_IMPORTED" ? "NOT_IMPORTED" : "NOT_REGISTERED";
+  const countStatus = text(stats?.countStatus);
+
+  return {
+    status,
+    count,
+    period: count === null ? null : text(stats?.period),
+    countStatus:
+      count !== null && VISITOR_COUNT_STATUSES.includes(countStatus as VisitorCountStatus)
+        ? (countStatus as VisitorCountStatus)
+        : null,
   };
 }
 
@@ -249,7 +325,9 @@ export function toPlace(raw: unknown): Place | null {
     coordinates: latitude !== null && longitude !== null ? { latitude, longitude } : null,
     category: contentTypeName(attraction.contentTypeId),
     regionCenterRank: toCenterRank(attraction),
-    interest: toInterest(attraction),
+    onlineMention: toOnlineMention(attraction),
+    tmapRank: toTmapRank(attraction),
+    visitorStats: toVisitorStats(attraction),
     forecast: toForecastSummary(attraction.visitTiming),
   };
 }

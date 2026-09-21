@@ -2,7 +2,8 @@ import { Link } from "react-router";
 
 import type { Place, RelatedPlace } from "../lib/contract";
 import type { DateMode } from "../lib/explore-params";
-import { formatSourceCaption } from "../lib/format";
+import { formatObservedAtShort, formatSourceCaption } from "../lib/format";
+import { placeSignals } from "../lib/place-signals";
 import { FactBadge, NoDataBadge } from "./badges";
 import { CrowdBadge, NoForecastBadge, QuietDateValue } from "./crowd-badge";
 
@@ -85,9 +86,30 @@ export function PlaceCard({
         )}
       </div>
 
-      <p className="type-caption mt-2 text-grey-600">
-        {formatSourceCaption(rank.source, rank.observedAt)}
-      </p>
+      {/*
+        장소 발견 신호 셋 — 온라인 언급량 · TMAP 검색순위 · 입장객 수.
+        **각각 제 줄에 제 기준 시점과 함께** 선다. 합치지 않고, 어느 하나가 다른 하나의
+        결측을 대신하지도 않는다 (PRD v4 §신호 결합). 없는 신호도 자리를 비우지 않는다.
+      */}
+      <ul className="mt-2 space-y-1">
+        {placeSignals(place).map((signal) => (
+          <li key={signal.key}>
+            {signal.kind === "value" ? (
+              <p className="type-body-md text-grey-800">
+                {signal.value}
+                {signal.basis ? (
+                  <span className="type-caption text-grey-600"> · {signal.basis}</span>
+                ) : null}
+              </p>
+            ) : (
+              <NoDataBadge>{signal.label}</NoDataBadge>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {/* 카드 캡션은 기준 시점 한 줄이다 — 공급자 이름은 화면에 적지 않는다 (#35). */}
+      <p className="type-caption mt-2 text-grey-600">{formatObservedAtShort(rank.observedAt)}</p>
     </article>
   );
 }

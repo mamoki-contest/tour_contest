@@ -48,6 +48,83 @@ export interface PlaceForecastSummary {
   observedAt: string | null;
 }
 
+/* ─────────────────────────  장소 발견 신호 세 가지 (슬라이스 #4)  ───────────────────────── */
+
+/**
+ * 온라인 언급량이 왜 그 값인지 — **네 상태를 같은 문구로 표시하지 않는다.**
+ *
+ * `Sourced<number>` 하나로 담지 않는 이유가 여기 있다. 저 봉투는 값이 있다·없다까지만
+ * 말할 수 있는데, 없는 이유가 `이름이 흔해 가릴 수 없다`인 것과 `호출이 실패했다`인 것은
+ * 사용자에게 다른 사실이다. 강원 카탈로그에서 `AMBIGUOUS`는 76곳으로 드물지도 않다.
+ *
+ * 이름은 백엔드 README의 상태값 표를 그대로 쓴다 — 프론트만 다른 말을 만들면 QA가
+ * 두 어휘를 옮겨 가며 읽어야 한다.
+ */
+export type OnlineMentionStatus =
+  /** 정상 수집. **0건도 정상이다.** */
+  | "COLLECTED"
+  /** 이름이 모호해 검색 결과를 그 장소의 언급량으로 볼 수 없다. */
+  | "AMBIGUOUS"
+  /** 검색어를 만들 수 없어 애초에 수집 대상이 아니다. */
+  | "UNAVAILABLE"
+  /** 값을 얻지 못했다. 활성 스냅샷에 이 장소가 없는 경우도 여기다. */
+  | "COLLECTION_FAILED";
+
+/**
+ * 블로그 검색 결과 수. **실제 방문객 수·고유 게시글 수·검색량·현재 혼잡이 아니다.**
+ * 목록 정렬이 쓰는 유일한 값이고, 다른 두 신호가 이 값의 결측을 대신하지 않는다.
+ */
+export interface OnlineMention {
+  status: OnlineMentionStatus;
+  /** 정상 수집이 아니면 null. **0으로 읽지 않는다** — 0건은 `COLLECTED`의 정상 값이다. */
+  count: number | null;
+  /** 수집 시각 (ISO-8601). 월 1회 스냅샷이라 카드에는 수집 월로 줄여 쓴다. */
+  collectedAt: string | null;
+  /** 검색어 규칙 버전. 버전이 다른 값은 같은 정렬에서 섞지 않는다. */
+  ruleVersion: string | null;
+}
+
+/** 파일에 수록됐는지. 수록되지 않은 것을 `0위`나 꼴찌로 만들지 않는다. */
+export type TmapRankStatus = "AVAILABLE" | "NOT_AVAILABLE";
+
+/**
+ * 시·군 **안에서의** 내비게이션 검색순위. 보조 근거이고 목록 정렬을 바꾸지 않는다.
+ * 서로 다른 시·군의 순위를 강원 전역 순위처럼 견주지 않는다 (PRD v4 §보조 신호).
+ */
+export interface TmapRank {
+  status: TmapRankStatus;
+  /** 시·군 내 순위. 수록되지 않았으면 null. */
+  rank: number | null;
+  /** 원천 조회기간. `202508-202607` 모양으로 온다. */
+  period: string | null;
+}
+
+/** 공표월 집계가 있는지. 미등록·미집계를 `0명`으로 만들지 않는다. */
+export type VisitorStatsStatus =
+  /** 공표월 집계가 있다. */
+  | "AVAILABLE"
+  /** 통계에 없거나 그 공표월에 집계되지 않았다. */
+  | "NOT_REGISTERED"
+  /** 통계 파일을 아직 적재하지 않았다 — 그 장소를 확인해 본 적이 없다는 뜻이다. */
+  | "NOT_IMPORTED";
+
+/** 잠정치인지 확정치인지. 확정은 이듬해 4월에 공표된다. */
+export type VisitorCountStatus = "PROVISIONAL" | "CONFIRMED";
+
+/**
+ * 등록 관광지의 **실제** 입장객 집계. 세 신호 중 유일하게 사람 수를 세는 값이라
+ * 잠정·확정을 반드시 함께 적는다 — 잠정치를 확정치처럼 읽히게 두지 않는다.
+ */
+export interface VisitorStats {
+  status: VisitorStatsStatus;
+  /** 공표월 입장객 수(내국인+외국인 공식 합계). 없으면 null. */
+  count: number | null;
+  /** 공표월. `202512` 모양으로 온다. */
+  period: string | null;
+  /** 값이 없으면 null. */
+  countStatus: VisitorCountStatus | null;
+}
+
 export interface Place {
   /** 표준 관광지 식별자 — 공급자 간 매칭을 마친 한사나다 내부 식별자. */
   placeId: string;
@@ -59,8 +136,13 @@ export interface Place {
   category: string | null;
   /** 시·군 내부 중심관광지 순위. 미산정이면 status가 `MISSING`이다. */
   regionCenterRank: Sourced<number>;
-  /** 관광지 관심도 — 정렬용. 미산정이면 status가 `MISSING`이고 낮은 값이 아니다. */
-  interest: Sourced<number>;
+  /**
+   * 세 신호는 **각각 따로 온다.** 범위도 단위도 기준 시점도 달라서 하나의 점수로
+   * 합치지 않고, 어느 하나가 다른 하나의 결측을 대신하지도 않는다 (PRD v4 §신호 결합).
+   */
+  onlineMention: OnlineMention;
+  tmapRank: TmapRank;
+  visitorStats: VisitorStats;
   forecast: PlaceForecastSummary;
 }
 

@@ -34,6 +34,8 @@ interface BackendListResponse {
   page?: number | null;
   size?: number | null;
   sort?: string | null;
+  /** 요청한 정렬을 **실제로 적용했는지**. 백엔드가 직접 말한다 — 프론트가 추측하지 않는다. */
+  sortApplied?: boolean | null;
   dataStatus?: BackendDataStatus | null;
   collectedAt?: string | null;
   source?: string | null;
@@ -52,9 +54,9 @@ function toPlaces(items: BackendAttraction[] | null | undefined): Place[] {
     : [];
 }
 
-/** 정렬 방향을 백엔드 이름으로 옮긴다. 화면은 `인기 많은 순`, 백엔드는 온라인 언급량이다. */
+/** 정렬 방향을 백엔드 이름으로 옮긴다. */
 function toBackendSort(sort: ExploreState["sort"]): string {
-  return sort === "INTEREST_ASC" ? "ONLINE_MENTION_ASC" : "ONLINE_MENTION_DESC";
+  return sort === "MENTION_ASC" ? "ONLINE_MENTION_ASC" : "ONLINE_MENTION_DESC";
 }
 
 /** 탐색 조건을 목록 질의로 옮긴다. 시트 스냅 같은 화면 상태는 보내지 않는다. */
@@ -115,17 +117,17 @@ function toSearchInfo(data: BackendSearchResponse): PlaceListSearch {
   };
 }
 
-function toListResponse(
-  data: BackendListResponse,
-  search: PlaceListSearch | null,
-  requestedSort: string | null,
-): PlaceListResponse {
+function toListResponse(data: BackendListResponse, search: PlaceListSearch | null): PlaceListResponse {
   return {
     places: toPlaces(data.items),
     totalCount: num(data.totalCount),
     search,
-    // 백엔드가 적용한 정렬을 그대로 되돌려준다. 요청과 다르면 적용되지 않은 것이다.
-    sortApplied: requestedSort !== null && data.sort === requestedSort,
+    /*
+     * 응답의 `sort` 는 **요청한** 기준을 그대로 되비칠 뿐이라 요청과 비교해 봐야 늘 같다.
+     * 적용 여부는 `sortApplied` 만 안다 — 언급량 스냅샷이 비어 이름 오름차순으로 온
+     * 목록이 `언급 많은 순`으로 읽히던 것이 그 차이다.
+     */
+    sortApplied: data.sortApplied === true,
     status: toDataStatus(data.dataStatus),
     source: text(data.source),
     observedAt: text(data.collectedAt),
@@ -148,7 +150,7 @@ export async function fetchPlaceList(
       signal,
     );
     return result.ok
-      ? { ok: true, data: toListResponse(result.data, toSearchInfo(result.data), null) }
+      ? { ok: true, data: toListResponse(result.data, toSearchInfo(result.data)) }
       : { ok: false, failure: result.failure };
   }
 
@@ -162,7 +164,7 @@ export async function fetchPlaceList(
     signal,
   );
   if (result.ok) {
-    return { ok: true, data: toListResponse(result.data, null, sort) };
+    return { ok: true, data: toListResponse(result.data, null) };
   }
 
   /*
@@ -186,6 +188,6 @@ export async function fetchPlaceList(
     signal,
   );
   return retried.ok
-    ? { ok: true, data: toListResponse(retried.data, null, null) }
+    ? { ok: true, data: toListResponse(retried.data, null) }
     : { ok: false, failure: retried.failure };
 }

@@ -7,8 +7,11 @@ import { isWithinForecastWindow } from "./forecast-window";
  * 무너진다. 컴포넌트 상태가 아니라 URL을 진실로 삼아 뒤로가기가 탐색을 복원하게 한다.
  */
 
-/** 관광지 관심도 정렬 방향. `혼잡한 순`·`한산한 순`이라는 이름을 쓰지 않는다 — 인기도는 혼잡이 아니다. */
-export type SortOrder = "INTEREST_DESC" | "INTEREST_ASC";
+/**
+ * 온라인 언급량 정렬 방향. `인기`·`혼잡한 순`·`한산한 순`이라는 이름을 쓰지 않는다 —
+ * 블로그 검색 결과 수는 인기도 혼잡도 아니다 (PRD v4 §변경표).
+ */
+export type SortOrder = "MENTION_DESC" | "MENTION_ASC";
 
 /** 날짜 모드. 고정 모드에서만 선택일을 받는다. */
 export type DateMode = "FLEXIBLE" | "FIXED";
@@ -70,7 +73,7 @@ export interface ExploreState {
   sheet: OpenSheet | null;
 }
 
-/** 첫 진입 기본 상태 — 강원 전체 · 무테마 · 날짜 미정 · 인기 많은 순 (ADR-0005). */
+/** 첫 진입 기본 상태 — 강원 전체 · 무테마 · 날짜 미정 · 온라인 언급 많은 순 (PRD v4 §탐색과 지도). */
 export const DEFAULT_EXPLORE_STATE: ExploreState = {
   regionCode: null,
   bounds: null,
@@ -79,12 +82,32 @@ export const DEFAULT_EXPLORE_STATE: ExploreState = {
   query: null,
   dateMode: "FLEXIBLE",
   date: null,
-  sort: "INTEREST_DESC",
+  sort: "MENTION_DESC",
   snap: "middle",
   sheet: null,
 };
 
-const SORTS: SortOrder[] = ["INTEREST_DESC", "INTEREST_ASC"];
+/**
+ * 쿼리에 올 수 있는 정렬 값 — **옛 값도 받는다.**
+ *
+ * `INTEREST_*` 는 PRD v2 어휘(`인기 많은 순`)로 만들어진 값이고 화면에서는 사라졌지만,
+ * 그 값이 걸린 링크는 이미 공유되고 북마크됐다. 받아 주지 않으면 그 링크들이 조용히
+ * 기본 정렬로 떨어진다 — 사용자는 자기가 고른 방향이 뒤집힌 줄도 모른다.
+ *
+ * 새로 만드는 주소에는 `MENTION_*` 만 쓴다(`toSearchParams`). 옛 값을 계속 찍어 내면
+ * 폐기된 어휘가 주소에 영영 남는다. 받는 입은 넓게, 내는 입은 좁게.
+ */
+const SORT_VALUES: Record<string, SortOrder> = {
+  MENTION_DESC: "MENTION_DESC",
+  MENTION_ASC: "MENTION_ASC",
+  INTEREST_DESC: "MENTION_DESC",
+  INTEREST_ASC: "MENTION_ASC",
+};
+
+/** 모르는 값이면 기본 정렬로 돌린다 — 주소를 손댄 것이므로 뜻을 지어내지 않는다. */
+export function parseSortOrder(raw: string | null): SortOrder {
+  return (raw === null ? undefined : SORT_VALUES[raw]) ?? DEFAULT_EXPLORE_STATE.sort;
+}
 const SNAPS: SheetSnap[] = ["peek", "middle", "full"];
 const SHEETS: OpenSheet[] = ["region", "search", "date"];
 
@@ -209,7 +232,7 @@ export function parseExploreState(params: URLSearchParams, now: Date = new Date(
     query: text(params, "q"),
     dateMode,
     date,
-    sort: SORTS.includes(sortRaw as SortOrder) ? (sortRaw as SortOrder) : DEFAULT_EXPLORE_STATE.sort,
+    sort: parseSortOrder(sortRaw),
     snap: SNAPS.includes(snapRaw as SheetSnap) ? (snapRaw as SheetSnap) : DEFAULT_EXPLORE_STATE.snap,
     sheet: SHEETS.includes(sheetRaw as OpenSheet) ? (sheetRaw as OpenSheet) : null,
   };

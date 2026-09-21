@@ -34,7 +34,7 @@ export function ConditionBar({
   const themeLabel = state.theme ?? (state.query ? `'${state.query}' 검색` : "무테마");
   const dateLabel =
     state.dateMode === "FIXED" && state.date ? formatChipDate(state.date) : "날짜 미정";
-  const sortLabel = state.sort === "INTEREST_DESC" ? "인기 많은 순" : "덜 알려진 순";
+  const sortLabel = state.sort === "MENTION_DESC" ? "온라인 언급 많은 순" : "온라인 언급 적은 순";
 
   return (
     <div className="flex gap-2 overflow-x-auto" aria-label="적용된 탐색 조건">
