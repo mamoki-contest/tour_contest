@@ -30,11 +30,6 @@ export function formatObservedAt(observedAt: string | null): string {
   return `${formatter.format(parsed)} 기준`;
 }
 
-/** 출처와 기준 시점을 한 줄로 묶는다. 이 캡션 없이는 어떤 값도 화면에 올리지 않는다. */
-export function formatSourceCaption(source: string | null, observedAt: string | null): string {
-  return [source ?? "출처 없음", formatObservedAt(observedAt)].join(" · ");
-}
-
 /**
  * 좁은 자리의 기준 시점 — `3월 19일 기준`.
  *

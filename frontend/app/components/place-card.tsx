@@ -2,15 +2,16 @@ import { Link } from "react-router";
 
 import type { Place, RelatedPlace } from "../lib/contract";
 import type { DateMode } from "../lib/explore-params";
-import { formatObservedAtShort, formatSourceCaption } from "../lib/format";
+import { formatObservedAtShort } from "../lib/format";
+import { formatStatusCaption, isStale } from "../lib/data-status";
 import { placeSignals } from "../lib/place-signals";
-import { FactBadge, NoDataBadge } from "./badges";
+import { FactBadge, NoDataBadge, StaleBadge } from "./badges";
 import { CrowdBadge, NoForecastBadge, QuietDateValue } from "./crowd-badge";
 
 /**
  * 관광지 카드 — 이 제품의 기본 단위.
- * 구성 순서가 고정이다: 사진 → 이름(2줄) → 주소(1줄) → 배지 한 줄 → 출처·기준 시점 캡션.
- * 캡션은 마지막이고 빠질 수 없다.
+ * 구성 순서가 고정이다: 사진 → 이름(2줄) → 주소(1줄) → 배지 한 줄 → 신호 셋 → 기준 시점 캡션.
+ * 캡션은 마지막이고, 공급자 이름 없이 기준 시점만 적는다 (#35).
  */
 export function PlaceCard({
   place,
@@ -79,6 +80,12 @@ export function PlaceCard({
           <NoForecastBadge />
         ) : null}
 
+        {/*
+          예측이 최종 정상 데이터로 왔으면 그 사실을 배지로 말한다 (#21).
+          갓 받은 예측과 며칠 묵은 예측이 같은 `한산`으로 보이면 헛걸음이 된다.
+        */}
+        {isStale(forecast.status) ? <StaleBadge>최근 저장된 예측</StaleBadge> : null}
+
         {rank.value !== null ? (
           <FactBadge>시·군 중심관광지 {rank.value}위</FactBadge>
         ) : (
@@ -138,6 +145,7 @@ export function PlaceCardSkeleton() {
  */
 export function RelatedPlaceCard({ place }: { place: RelatedPlace }) {
   const forecast = place.forecast;
+  const caption = formatStatusCaption(forecast.status, forecast.observedAt);
 
   return (
     <article className="h-full rounded-xl bg-surface p-4">
@@ -159,11 +167,12 @@ export function RelatedPlaceCard({ place }: { place: RelatedPlace }) {
         </div>
       ) : null}
 
-      {forecast.source ? (
-        <p className="type-caption mt-2 text-grey-600">
-          {formatSourceCaption(forecast.source, forecast.observedAt)}
-        </p>
-      ) : null}
+      {/*
+        캡션은 기준 시점 한 줄뿐이다 — 공급자 이름은 화면에 적지 않는다 (#35).
+        낡은 값이면 그 사실이 시점보다 먼저 온다 (#21). 적을 것이 없으면 줄을
+        만들지 않는다 — 빈 자리를 문구로 메우지 않는다.
+      */}
+      {caption ? <p className="type-caption mt-2 text-grey-600">{caption}</p> : null}
     </article>
   );
 }
