@@ -37,7 +37,9 @@ export function PlaceCard({
   const forecast = place.forecast;
 
   return (
-    <article className="relative rounded-xl bg-surface p-4">
+    // `min-w-0` — 목록이 격자라서, 이것이 없으면 칸의 자동 최소 크기가 카드의
+    // min-content(아래 주소 줄의 `truncate` 한 줄 길이)가 되어 카드가 목록 밖으로 나간다.
+    <article className="relative min-w-0 rounded-xl bg-surface p-4">
       {/* 저장 버튼의 40px 타깃을 카드 링크 밖에 둔다 — 저장과 상세 이동이 충돌하지 않게. */}
       {saveButton ? <div className="absolute top-6 right-6 z-10">{saveButton}</div> : null}
 
@@ -155,7 +157,13 @@ export function RelatedPlaceCard({ place }: { place: RelatedPlace }) {
   const caption = formatStatusCaption(forecast.status, forecast.observedAt);
 
   return (
-    <article className="h-full rounded-xl bg-surface p-4">
+    /*
+     * `relative` 는 이 카드가 자기 안의 `sr-only`(= `position: absolute`)의 기준 상자가
+     * 되게 한다. 이 카드는 가로 스크롤 줄에 놓이는데, 기준 상자가 그 줄 바깥에 있으면
+     * 보이지 않는 그 글자가 스크롤에 잘리지 않고 **페이지 폭을 밀어낸다** — 카드가
+     * 오른쪽으로 갈수록 더 많이. `min-w-0` 은 데스크톱 3열 격자에서 같은 이유다.
+     */
+    <article className="relative h-full min-w-0 rounded-xl bg-surface p-4">
       <h3 className="type-title-md line-clamp-2 text-grey-900">{place.name}</h3>
 
       <p className="type-body-md mt-2 truncate text-grey-600">
