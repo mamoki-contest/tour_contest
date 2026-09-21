@@ -289,9 +289,17 @@ export function MapView({
       currentSheetCover(),
     );
 
-    if (typeof map.containerPointToLatLng === "function" && typeof maps.Point === "function") {
-      const southWest = map.containerPointToLatLng(new maps.Point(rect.left, rect.bottom));
-      const northEast = map.containerPointToLatLng(new maps.Point(rect.right, rect.top));
+    // 변환은 지도가 아니라 투영 객체가 쥐고 있다.
+    const projection = typeof map.getProjection === "function" ? map.getProjection() : null;
+    if (
+      projection &&
+      typeof projection.coordsFromContainerPoint === "function" &&
+      typeof maps.Point === "function"
+    ) {
+      const southWest = projection.coordsFromContainerPoint(
+        new maps.Point(rect.left, rect.bottom),
+      );
+      const northEast = projection.coordsFromContainerPoint(new maps.Point(rect.right, rect.top));
       return boundsFromCorners(
         { lat: southWest.getLat(), lng: southWest.getLng() },
         { lat: northEast.getLat(), lng: northEast.getLng() },

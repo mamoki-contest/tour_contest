@@ -30,15 +30,20 @@ export interface KakaoPoint {
   y: number;
 }
 
+/**
+ * 컨테이너 픽셀 좌표와 위·경도 사이의 변환.
+ *
+ * `getBounds()` 는 컨테이너 전체를 말하므로 바텀시트가 덮은 아래쪽까지 포함한다.
+ * 사용자가 실제로 본 범위만 조회하려면 이 변환이 필요하다. 변환은 지도가 아니라
+ * **투영 객체**가 쥐고 있다 — `map.containerPointToLatLng` 같은 메서드는 없다.
+ */
+export interface KakaoProjection {
+  coordsFromContainerPoint(point: KakaoPoint): KakaoLatLng;
+}
+
 export interface KakaoMap {
   getBounds(): KakaoLatLngBounds;
-  /**
-   * 컨테이너 픽셀 좌표를 위·경도로 되돌린다.
-   *
-   * `getBounds()` 는 컨테이너 전체를 말하므로 바텀시트가 덮은 아래쪽까지 포함한다.
-   * 사용자가 실제로 본 범위만 조회하려면 이 변환이 필요하다.
-   */
-  containerPointToLatLng(point: KakaoPoint): KakaoLatLng;
+  getProjection(): KakaoProjection;
   /** 여백을 주면 그만큼 비워 두고 맞춘다 — 시트에 가리는 아래쪽을 피하는 데 쓴다. */
   setBounds(
     bounds: KakaoLatLngBounds,
