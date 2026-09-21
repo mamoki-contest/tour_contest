@@ -79,8 +79,16 @@ function ConditionChip({
   value: string;
   onClick?: () => void;
 }) {
+  /*
+   * `relative` 가 칩 자신을 아래 `sr-only` 의 기준 상자로 만든다 — 장식이 아니라 필요다.
+   *
+   * `sr-only` 는 `position: absolute` 다. 칩 안에 기준이 될 상자가 없으면 이 줄
+   * 바깥(가로 스크롤 영역 밖)의 상자가 기준이 되고, 그러면 **가로 스크롤이 잘라 주지
+   * 못한다** — 칩이 늘어나 스크롤 영역을 넘어가는 순간 그 보이지 않는 글자가 페이지
+   * 폭을 밀어낸다. 기준을 칩으로 당겨 두면 스크롤 영역 안에서 함께 잘린다.
+   */
   const shell =
-    "type-label-md inline-flex h-10 shrink-0 items-center rounded-sm bg-surface px-3 whitespace-nowrap text-grey-700 shadow-float";
+    "type-label-md relative inline-flex h-10 shrink-0 items-center rounded-sm bg-surface px-3 whitespace-nowrap text-grey-700 shadow-float";
 
   if (!onClick) {
     return (

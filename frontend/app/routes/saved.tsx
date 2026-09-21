@@ -130,9 +130,15 @@ export default function SavedRoute({ loaderData }: Route.ComponentProps) {
                   </div>
                 ) : null}
 
-                <ul className="mt-6 grid gap-6">
+                {/*
+                  트랙 이름을 `grid-cols-1`(= `minmax(0, 1fr)`)로 적고 칸마다 `min-w-0` 을
+                  준다. 둘 다 없으면 카드 안 주소 줄의 `truncate`(= `white-space: nowrap`)가
+                  격자의 min-content 를 주소 한 줄 길이로 끌어올려, 목록이 화면보다 넓어지고
+                  **페이지에 가로 스크롤이 생긴다**.
+                */}
+                <ul className="mt-6 grid grid-cols-1 gap-6">
                   {visible.map((place) => (
-                    <li key={place.placeId}>
+                    <li key={place.placeId} className="min-w-0">
                       <article className="rounded-xl bg-surface p-4">
                         {/*
                           어디서 온 카드인지 주소에 적어 둔다 (#42) — 상세의 `← 뒤로`가

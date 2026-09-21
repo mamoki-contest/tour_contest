@@ -387,7 +387,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
             <PlaceList>
               {data.places.map((place, index) => (
-                <div key={place.placeId}>
+                // `min-w-0` 이 없으면 격자 칸의 자동 최소 크기가 min-content 라서
+                // 트랙을 좁혀도 카드 자신이 시트 밖으로 삐져나온다.
+                <div key={place.placeId} className="min-w-0">
                   {index === unrankedFrom ? (
                     <UnrankedDivider count={data.places.length - index} />
                   ) : null}
@@ -665,7 +667,14 @@ function NoResults({
   );
 }
 
-/** 카드 사이 24px — 리듬의 세 값(48 · 24 · 8) 밖으로 나가지 않는다. */
+/**
+ * 카드 사이 24px — 리듬의 세 값(48 · 24 · 8) 밖으로 나가지 않는다.
+ *
+ * 한 칸짜리 격자라도 `grid-cols-1`(= `minmax(0, 1fr)`)을 명시한다. 이름을 적지 않으면
+ * 트랙이 `auto` 라서 **최소 크기가 칸 내용의 min-content** 가 되는데, 카드 안 주소 줄이
+ * `truncate`(= `white-space: nowrap`)라 그 min-content 가 주소 한 줄 전체 길이다.
+ * 그러면 트랙이 시트보다 넓어지고 카드가 통째로 시트 밖으로 밀려난다.
+ */
 function PlaceList({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-6">{children}</div>;
+  return <div className="grid grid-cols-1 gap-6">{children}</div>;
 }
