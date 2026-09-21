@@ -3,13 +3,15 @@ import { useState } from "react";
 import { OverlaySheet, PrimaryButton } from "./overlay-sheet";
 import type { DateMode, ExploreState } from "../lib/explore-params";
 import {
-  FORECAST_WINDOW_DAYS,
   dayOfMonth,
-  forecastWindow,
   leadingBlankCount,
   monthKey,
   monthLabel,
+  resolveWindow,
   todayInSeoul,
+  windowDates,
+  windowLabel,
+  type SupportedWindow,
 } from "../lib/forecast-window";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -22,21 +24,27 @@ const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
  *   보는지 확인한다. 장소 추천이 사용자의 날짜를 바꾸지 않는다.
  * - `한산한 날에 갈래요` — 장소를 먼저 보고, 장소마다 상대적으로 한산한 예상일을 받는다.
  *
- * 30일 밖은 아예 그리지 않는다 — 고를 수 없는 것을 보여주고 나중에 막지 않는다 (U10).
+ * 예측이 닿지 않는 날은 아예 그리지 않는다 — 고를 수 없는 것을 보여주고 나중에 막지
+ * 않는다 (U10). 창의 끝은 **응답이 말한 날**이다 (#30 M3): 프론트가 혼자 센 30일은
+ * 백엔드가 가진 창보다 길어서, 고를 수 있다고 그려 놓고 조회에서 되돌리곤 했다.
  */
 export function DateSheet({
   state,
+  supported,
   onClose,
   onApply,
 }: {
   state: ExploreState;
+  /** 응답이 말하는 예측 지원 창. 모르면 null이고, 그때만 오늘 + 30일로 되돌아간다. */
+  supported?: SupportedWindow | null;
   onClose: () => void;
   onApply: (mode: DateMode, date: string | null) => void;
 }) {
   const [mode, setMode] = useState<DateMode>(state.dateMode);
   const [date, setDate] = useState<string | null>(state.date);
 
-  const days = forecastWindow();
+  const window = resolveWindow(supported);
+  const days = windowDates(window);
   const today = todayInSeoul();
 
   // 달이 바뀌는 지점에서 끊어 그린다 — 30일 창이 두 달에 걸치는 것이 보통이다.
@@ -70,17 +78,13 @@ export function DateSheet({
       {mode === "FLEXIBLE" ? (
         <div className="mt-6 rounded-xl bg-grey-50 p-5">
           <p className="type-body-lg text-grey-700">
-            장소마다 앞으로 {FORECAST_WINDOW_DAYS}일 중 상대적으로 한산한 예상일을 알려드려요.
-          </p>
-          <p className="type-caption mt-2 text-grey-600">
-            각 장소 자체의 예측 안에서 비교한 날짜예요. 장소끼리 견주는 값이 아니에요.
+            장소마다 한산할 것으로 보이는 날을 알려드려요.
           </p>
         </div>
       ) : (
         <>
-          <p className="type-caption mt-6 text-grey-600">
-            오늘부터 {FORECAST_WINDOW_DAYS}일까지 고를 수 있어요. 그 뒤 날짜는 예측이 없어요.
-          </p>
+          {/* 며칠까지인지 숫자로 말한다 — `30일 안에서`는 실제 창과 어긋날 수 있다. */}
+          <p className="type-caption mt-6 text-grey-600">{windowLabel(window)} 중에서 고를 수 있어요</p>
 
           {Object.entries(months).map(([key, monthDays]) => (
             <section key={key} className="mt-6">

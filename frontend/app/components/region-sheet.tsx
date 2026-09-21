@@ -1,8 +1,9 @@
 import type { RegionVisitLevel, RegionVisitScale, RegionVisitScaleResponse } from "../lib/contract";
 import { formatVisitPeriod } from "../lib/format";
+import { formatStaleCaption, isStale } from "../lib/data-status";
 import { OverlaySheet } from "./overlay-sheet";
 import { NoDataBadge } from "./badges";
-import { ErrorState } from "./states";
+import { ErrorState, StaleNote } from "./states";
 
 /**
  * 탐색 범위 시트 (슬라이스 #3).
@@ -62,15 +63,17 @@ export function RegionSheet({
       ) : (
         <section className="mt-6">
           <h3 className="type-title-md text-grey-800">시·군별 방문 규모</h3>
-          <p className="type-caption mt-2 text-grey-600">
-            {[
-              data.source ?? "출처 없음",
-              formatVisitPeriod(data.periodStart, data.periodEnd) ?? "기준 기간 없음",
-            ].join(" · ")}
-          </p>
-          <p className="type-caption text-grey-600">
-            이 18개 시·군 사이에서 견준 값이에요. 지금 그 지역에 사람이 얼마나 있는지가 아니에요.
-          </p>
+          {/*
+            기준 기간 한 줄만 남긴다 (#35). 무엇을 센 값이고 무엇이 아닌지는 화면마다
+            되풀이하지 않고 도움말 한 자리로 옮겼다.
+          */}
+          {formatVisitPeriod(data.periodStart, data.periodEnd) ? (
+            <p className="type-caption mt-2 text-grey-600">
+              {formatVisitPeriod(data.periodStart, data.periodEnd)}
+            </p>
+          ) : null}
+          {/* 최종 정상 데이터로 돌아온 값은 그 사실을 말한다 (#21). */}
+          {isStale(data.status) ? <StaleNote caption={formatStaleCaption(null)} /> : null}
 
           <ul className="mt-4 grid gap-2">
             {data.regions.map((region) => (

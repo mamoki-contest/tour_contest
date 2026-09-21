@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 
 import { OverlaySheet, PrimaryButton } from "./overlay-sheet";
 import type { ExploreState } from "../lib/explore-params";
@@ -58,9 +59,6 @@ export function SearchSheet({
 
       <section className="mt-6">
         <h3 className="type-title-md text-grey-800">테마로 찾기</h3>
-        <p className="type-caption mt-2 text-grey-600">
-          이 여덟 가지는 관광지 유형과 큐레이션이 함께 관리돼요.
-        </p>
 
         {/* 한 줄 가로 스크롤 — 접거나 더보기를 만들지 않는다. 8개는 스크롤로 충분하다. */}
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
@@ -104,21 +102,24 @@ export function SearchSheet({
  *
  * 회색 면을 쓴다. **파란색을 쓰지 않는다** — 파랑은 이 제품에서 `검증된 것`의 색이고
  * 일반 검색 결과는 검증되지 않았다 (ADR-0003).
+ *
+ * 한 줄만 남긴다 (#35). 이 문장은 공급자 해명이 아니라 **결과의 자격**에 대한 말이라
+ * 지울 수 없다 — 지원 테마 결과만 큐레이션을 통과했고, 두 목록은 같은 모양으로 온다.
  */
 export function GeneralSearchNotice({ query }: { query: string | null }) {
   return (
-    <div className="rounded-lg bg-grey-100 p-4">
-      <p className="type-body-md text-grey-700">
-        {query ? `'${query}'와 관련된 관광 정보예요.` : "검색어와 관련된 관광 정보예요."} 테마에
-        맞는지, 대신 갈 만한 곳인지는 확인되지 않았어요.
-      </p>
-    </div>
+    <p className="type-body-md rounded-lg bg-grey-100 p-3 text-grey-700">
+      {query ? `'${query}'로 찾은 결과예요` : "검색어로 찾은 결과예요"} — 테마 큐레이션은
+      거치지 않았어요
+    </p>
   );
 }
 
 /**
- * 자유 입력이 지원 테마로 정규화됐을 때 그 사실을 문장으로 남긴다.
- * 조용히 바꾸지 않는다 — 사용자가 무엇으로 찾았는지 알아야 한다.
+ * 자유 입력이 지원 테마로 정규화됐을 때 그 사실을 한 줄로 남긴다 (#26).
+ *
+ * 조용히 바꾸지 않는다 — `해수용장`을 쳤는데 113곳이 나오면 사용자는 자기가 친 말이
+ * 그대로 통한 줄 안다. 무엇으로 바뀌어 찾았는지 알아야 결과를 읽을 수 있다.
  */
 export function ThemeNormalizedNotice({
   rawQuery,
@@ -128,19 +129,25 @@ export function ThemeNormalizedNotice({
   appliedTheme: string;
 }) {
   return (
-    <p className="type-body-md rounded-lg bg-grey-100 p-4 text-grey-700">
-      '{rawQuery}'를 지원 테마 '{appliedTheme}'으로 찾았어요.
+    <p className="type-body-md rounded-lg bg-grey-100 p-3 text-grey-700">
+      '{rawQuery}' → {appliedTheme} 테마로 찾았어요
     </p>
   );
 }
 
-/** 결과가 없을 때 억지 후보 대신 가까운 지원 테마를 권한다. */
+/**
+ * 결과가 없을 때 억지 후보 대신 가까운 지원 테마를 권한다 (#29).
+ *
+ * **링크다.** 전에는 문장 안의 글자라 눌러도 아무 일이 없었는데, 0건 화면에서 유일하게
+ * 다음으로 갈 수 있는 자리가 바로 여기다. 누를 수 있어 보이면 누를 수 있어야 한다.
+ */
 export function SuggestedThemes({
   themes,
-  onSelect,
+  hrefFor,
 }: {
   themes: string[];
-  onSelect: (theme: string) => void;
+  /** 그 테마로 다시 찾는 주소. 걸려 있던 다른 조건(시·군 등)은 호출자가 지킨다. */
+  hrefFor: (theme: string) => string;
 }) {
   if (themes.length === 0) return null;
 
@@ -149,14 +156,13 @@ export function SuggestedThemes({
       <p className="type-body-md text-grey-700">이런 테마는 어떠세요?</p>
       <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
         {themes.map((theme) => (
-          <button
+          <Link
             key={theme}
-            type="button"
-            onClick={() => onSelect(theme)}
+            to={hrefFor(theme)}
             className="type-label-md inline-flex h-10 shrink-0 items-center rounded-sm bg-grey-100 px-3 whitespace-nowrap text-grey-700 transition-colors duration-200 hover:bg-grey-200"
           >
             {theme}
-          </button>
+          </Link>
         ))}
       </div>
     </div>

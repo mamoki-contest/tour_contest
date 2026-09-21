@@ -6,6 +6,7 @@ import {
   splitParkingLots,
 } from "../lib/parking";
 import { FactBadge, NoDataBadge } from "./badges";
+import { formatStaleCaption, isStale } from "../lib/data-status";
 
 /**
  * 현재 접근 혼잡 (슬라이스 #8).
@@ -58,14 +59,14 @@ export function CurrentAccessSection({ access }: { access: CurrentAccess }) {
       )}
 
       {/*
-        조회 시각이 반드시 붙는다. 그리고 이것이 미래 날짜의 인파와 다른 정보라는 사실을
-        문장으로 못 박는다 — 바로 위 섹션이 30일 예측이라 섞여 읽히기 쉽다 (U20).
+        조회 시각은 반드시 붙는다 — 이 값은 날짜가 아니라 **시각**의 사정이라서다.
+        미래 날짜의 인파와 다르다는 설명은 화면마다 되풀이하지 않고 도움말로 옮겼고,
+        섹션을 가르는 일은 48px 간격과 제목이 그대로 맡는다 (U20, #35).
       */}
       <p className="type-caption mt-4 text-grey-600">
-        {[access.source ?? "출처 없음", formatObservedTime(access.observedAt)].join(" · ")}
-      </p>
-      <p className="type-caption text-grey-600">
-        지금 가는 길의 사정이에요. 고른 날짜의 사람 수와는 다른 정보예요.
+        {isStale(access.status)
+          ? formatStaleCaption(access.observedAt)
+          : formatObservedTime(access.observedAt)}
       </p>
     </div>
   );
@@ -128,20 +129,25 @@ function ParkingBlock({ parking }: { parking: ParkingStatus }) {
         </div>
       ) : null}
 
-      <p className="type-caption text-grey-600">{parkingCaption(parking)}</p>
+      {parkingCaption(parking) ? (
+        <p className="type-caption text-grey-600">{parkingCaption(parking)}</p>
+      ) : null}
     </div>
   );
 }
 
 /**
- * 주차의 출처·조회 시각. 도로와 공급자도 시각도 달라 같은 캡션에 묶지 않는다.
+ * 주차의 조회 시각. 도로와 시각이 달라 같은 캡션에 묶지 않는다.
  *
- * 실시간 값이 없으면 `조회 시각`을 붙이지 않는다 — 반기마다 갱신되는 정적 정보에
- * 시각을 달면 방금 본 값처럼 읽힌다.
+ * 실시간 값이 없으면 시각을 붙이지 않는다 — 반기마다 갱신되는 정적 정보에 시각을
+ * 달면 방금 본 값처럼 읽힌다. 그때는 규모만 안다는 사실을 위의 줄이 이미 말했으므로
+ * 캡션 자체를 그리지 않는다 (#35).
  */
-function parkingCaption(parking: ParkingStatus): string {
-  const source = parking.source ?? "출처 없음";
-  return parking.observedAt ? `${source} · ${formatObservedTime(parking.observedAt)}` : source;
+function parkingCaption(parking: ParkingStatus): string | null {
+  if (!parking.observedAt) return null;
+  return isStale(parking.status)
+    ? formatStaleCaption(parking.observedAt)
+    : formatObservedTime(parking.observedAt);
 }
 
 /** 접근 정보는 날짜가 아니라 **시각**이 중요하다 — 분 단위까지 보여준다. */

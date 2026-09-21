@@ -57,3 +57,28 @@ export function SecondaryButton({
     </button>
   );
 }
+
+/**
+ * 신호 아래 한 줄 캡션 (#35).
+ *
+ * 전에는 이 자리에 공급자 이름과 해명 문장이 함께 실렸다. 이제 남는 것은 **기준
+ * 시점**뿐이고, 값이 낡았으면(`STALE`) 그 사실이 시점보다 먼저 온다. 쓸 말이 없으면
+ * 줄 자체를 그리지 않는다 — 빈 자리를 문구로 메우지 않는다.
+ */
+export function DataNote({ children }: { children: React.ReactNode }) {
+  if (!children) return null;
+  return <p className="type-caption mt-2 text-grey-600">{children}</p>;
+}
+
+/**
+ * 최종 정상 데이터 안내 (#21).
+ *
+ * `STALE` 은 값이 **있지만 낡은** 상태다. 없는 값(`정보 없음`)과 다른 문구를 쓰고,
+ * 다른 형태를 쓴다 — 점선 배지는 `값이 없다`의 약속이라 여기에 쓰면 뜻이 섞인다.
+ * 색으로 경고하지도 않는다: 낡은 값은 오류가 아니라 지금 줄 수 있는 최선이다.
+ */
+export function StaleNote({ caption }: { caption: string }) {
+  return (
+    <p className="type-caption mt-2 rounded-sm bg-grey-100 px-2 py-1 text-grey-700">{caption}</p>
+  );
+}
