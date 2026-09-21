@@ -5,6 +5,11 @@
   --font-sans: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont,
     system-ui, "Malgun Gothic", sans-serif;
 
+  /* 주요 타이틀 서체 — type-display · type-headline-lg · type-headline-md 만 쓴다.
+     서체 파일·웹폰트 라이선스 확정 전이라 첫 항목이 아직 없고, 지금은 폴백(Pretendard)으로 렌더된다.
+     본문·라벨·배지·숫자는 --font-sans 그대로다. */
+  --font-display: "Sandoll CreamPang", var(--font-sans);
+
   --color-primary: #014ca9;
   --color-primary-strong: #013b84;
   --color-primary-deep: #012b60;
@@ -41,18 +46,26 @@
   --shadow-float: 0 2px 10px rgba(0, 27, 55, 0.1), 0 3px 20px rgba(2, 32, 71, 0.05);
 }
 
-/* 타이포 스케일 — TDS 측정값. 자간은 건드리지 않는다. */
+/* @font-face — 웹폰트 라이선스 확정 후 public/fonts 또는 산돌구름 스크립트.
+   파일이 오면 여기와 위 --font-display 두 곳만 고치면 된다. 폴백 체인은 그대로 두어,
+   파일을 못 받아도 Pretendard로 떨어지게 한다. root.tsx 에 외부 스크립트는 넣지 않았다. */
+
+/* 타이포 스케일 — TDS 측정값. 자간은 건드리지 않는다.
+   아래 셋만 주요 타이틀 서체(--font-display)를 쓴다. title-md 이하는 Pretendard. */
 @utility type-display {
+  font-family: var(--font-display);
   font-size: 30px;
   line-height: 40px;
   font-weight: 700;
 }
 @utility type-headline-lg {
+  font-family: var(--font-display);
   font-size: 24px;
   line-height: 33px;
   font-weight: 700;
 }
 @utility type-headline-md {
+  font-family: var(--font-display);
   font-size: 20px;
   line-height: 29px;
   font-weight: 700;

@@ -14,6 +14,8 @@
     --red:#F04452; --red-surface:#FFEEEE; --red-deep:#A51926; --green:#03B26C; --amber:#FF9200;
     --shadow-float: 0 2px 10px rgba(0,27,55,.1), 0 3px 20px rgba(2,32,71,.05);
     --font: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    /* 주요 타이틀 서체 자리 — 파일·웹폰트 라이선스 확정 전이라 지금은 폴백(Pretendard)으로 렌더된다. */
+    --font-display: "Sandoll CreamPang", var(--font);
   }
   *{box-sizing:border-box}
   html,body{margin:0}
@@ -24,13 +26,13 @@
   }
   .page{max-width:1180px;margin:0 auto;padding:40px 24px 96px}
   .doc-head{margin-bottom:40px}
-  .doc-head h1{font-size:30px;line-height:40px;font-weight:700;margin:0 0 8px}
+  .doc-head h1{font-family:var(--font-display);font-size:30px;line-height:40px;font-weight:700;margin:0 0 8px}
   .doc-head p{font-size:15px;line-height:22.5px;font-weight:400;color:var(--grey-700);margin:0 0 6px;max-width:70ch}
   .doc-head a{color:var(--primary-strong);font-weight:600}
   .cols{display:grid;grid-template-columns:1fr;gap:32px}
   @media(min-width:900px){.cols{grid-template-columns:minmax(0,1fr) 411px}}
   .panel{background:var(--surface);border-radius:20px;padding:24px}
-  .panel > h2{font-size:20px;line-height:29px;font-weight:700;margin:0 0 4px;color:var(--grey-800)}
+  .panel > h2{font-family:var(--font-display);font-size:20px;line-height:29px;font-weight:700;margin:0 0 4px;color:var(--grey-800)}
   .panel > .sub{font-size:13px;line-height:19.5px;color:var(--grey-600);margin:0 0 24px}
   .blk{margin-bottom:32px}
   .blk:last-child{margin-bottom:0}
@@ -62,7 +64,7 @@
   /* ---- 한사나다 폰 ---- */
   .phone{width:375px;max-width:100%;margin:0 auto;background:var(--grey-50);border-radius:28px;overflow:hidden;box-shadow:var(--shadow-float)}
   .phone-in{padding:24px 24px 32px}
-  .h-title{font-size:30px;line-height:40px;font-weight:700;color:var(--grey-900);margin:0 0 20px}
+  .h-title{font-family:var(--font-display);font-size:30px;line-height:40px;font-weight:700;color:var(--grey-900);margin:0 0 20px}
   .search{height:48px;border-radius:16px;background:var(--grey-100);display:flex;align-items:center;padding:0 16px;gap:8px;color:var(--grey-600);font-size:17px;line-height:25.5px}
   .search svg{flex:0 0 auto}
   .chips{display:flex;gap:8px;overflow-x:auto;margin:16px -24px 0;padding:0 24px 4px;scrollbar-width:none}
@@ -80,7 +82,7 @@
   .map-pill{font-size:11px;font-weight:600;fill:var(--grey-900)}
 
   .listhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:32px 0 8px}
-  .listhead h2{font-size:20px;line-height:29px;font-weight:700;margin:0;color:var(--grey-800)}
+  .listhead h2{font-family:var(--font-display);font-size:20px;line-height:29px;font-weight:700;margin:0;color:var(--grey-800)}
   .src{font-size:13px;line-height:19.5px;color:var(--grey-600);margin:0 0 16px}
 
   .card{background:var(--surface);border-radius:20px;padding:16px;margin-bottom:24px;position:relative;transition:background .2s}
@@ -386,7 +388,7 @@
     </ul>
     <div class="ok">
       <b>확인 완료 (2026-09-02, 색·서체는 2026-09-21 갱신) — 미확인 값 0</b><br>
-      서체 <b>Pretendard</b>.<br>
+      서체 — 본문·라벨·배지는 <b>Pretendard</b>, 주요 타이틀(<code>display</code>·<code>headline-lg</code>·<code>headline-md</code>)은 <b>Sandoll 크림빵</b> 자리만 잡아 둔 상태입니다 — 서체 파일·웹폰트 라이선스 확정 전이라 이 미리보기도 <b>폴백인 Pretendard</b>로 렌더됩니다.<br>
       주 버튼 <b>#013B84</b>(흰 글씨 <b>10.71:1</b>, AA 통과) · 눌림 <b>#012B60</b>(13.85:1) · 혼잡 배지는 <b>한산만 강조</b> · 도로 서행 점 <b>#FF9200</b>.<br>
       포인트 색 <b>#014CA9</b>은 흰 배경에서 <b>8.05:1</b>이라 글씨로도 쓸 수 있지만, 파란 글씨는 <b>#013B84</b> 하나로 모읍니다 — 화면당 행동 하나.
     </div>
