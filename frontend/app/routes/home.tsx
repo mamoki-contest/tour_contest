@@ -24,14 +24,17 @@ import {
   exploreHref,
   hasDroppedDate,
   parseExploreState,
+  withMapBounds,
+  withRegionCode,
   type ExploreState,
   type MapBounds,
+  type MapViewport,
   type OpenSheet,
   type SheetSnap,
 } from "../lib/explore-params";
 import { fetchPlaceList } from "../lib/places.server";
 import { fetchRegionVisitScale } from "../lib/regions.server";
-import { formatObservedAt, formatVisitPeriod } from "../lib/format";
+import { formatObservedAt, formatVisitPeriodShort } from "../lib/format";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -81,6 +84,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   // 버린 조건은 화면이 말한다. 조용히 무시하면 사용자는 다른 조건의 결과를 읽게 된다.
   const dropped = { date: hasDroppedDate(params), region: droppedRegion };
 
+  /*
+   * 목록에 **실제로 적용된** 시·군. 지도가 시·군을 따라 움직일 때 URL의 값이 아니라
+   * 이 값을 봐야 한다 — 조회가 끝나기 전의 URL을 보면 아직 이전 시·군의 마커로
+   * 지도를 맞추게 되고, 그 뒤 새 마커가 와도 이미 맞췄다고 여겨 멈춘다.
+   */
+  const appliedRegion = droppedRegion ? null : state.regionCode;
+
   // 지도 SDK는 브라우저가 직접 불러야 하므로 이 키는 클라이언트로 내려간다.
   // 관광 API 키와 달리 숨길 수 있는 값이 아니고, 도메인 등록이 보호 장치다.
   const kakaoAppKey = process.env.KAKAO_MAP_APP_KEY ?? "";
@@ -92,15 +102,31 @@ export async function loader({ request }: Route.LoaderArgs) {
       data: null,
       regions: regionData,
       dropped,
+      appliedRegion,
       kakaoAppKey,
       error: { dataName: result.failure.dataName },
     };
   }
 
-  return { data: result.data, regions: regionData, dropped, kakaoAppKey, error: null };
+  return {
+    data: result.data,
+    regions: regionData,
+    dropped,
+    appliedRegion,
+    kakaoAppKey,
+    error: null,
+  };
 }
 
-/** 시트를 끌어올린 것만으로 목록을 다시 부르지 않는다 — 스냅은 화면 상태지 조회 조건이 아니다. */
+/**
+ * 화면 상태만 바뀐 이동은 목록을 다시 부르지 않는다.
+ *
+ * 시트 스냅(`snap`)과 지도 위치(`c`·`z`)가 그것이다. 특히 지도 위치는 **사용자가 지도를
+ * 미는 동안 계속 바뀐다** — 여기서 걸러 내지 않으면 손가락을 뗄 때마다 목록 전체를
+ * 다시 부른다. 조회 범위는 `이 지도 영역에서 검색` 을 눌러야 확정되는 `bbox` 쪽이다.
+ */
+const VIEW_ONLY_PARAMS = ["snap", "c", "z"];
+
 export function shouldRevalidate({
   currentUrl,
   nextUrl,
@@ -108,8 +134,10 @@ export function shouldRevalidate({
 }: ShouldRevalidateFunctionArgs) {
   const current = new URLSearchParams(currentUrl.search);
   const next = new URLSearchParams(nextUrl.search);
-  current.delete("snap");
-  next.delete("snap");
+  for (const key of VIEW_ONLY_PARAMS) {
+    current.delete(key);
+    next.delete(key);
+  }
   if (currentUrl.pathname === nextUrl.pathname && current.toString() === next.toString()) {
     return false;
   }
@@ -117,7 +145,7 @@ export function shouldRevalidate({
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { data, regions, dropped, kakaoAppKey, error } = loaderData;
+  const { data, regions, dropped, appliedRegion, kakaoAppKey, error } = loaderData;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
@@ -137,7 +165,25 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const searchThisArea = useCallback(
     (bounds: MapBounds) => {
       // 지도를 움직인 것만으로는 목록이 바뀌지 않는다 — 사용자가 눌러야 범위가 확정된다.
-      navigate(exploreHref({ ...state, bounds }), { preventScrollReset: true });
+      // 시·군 조건은 함께 풀린다: 두 범위가 AND 로 걸리면 조건 칩이 말하는 범위와
+      // 실제 조회 범위가 달라진다.
+      navigate(exploreHref(withMapBounds(state, bounds)), { preventScrollReset: true });
+    },
+    [navigate, state],
+  );
+
+  /**
+   * 지도를 민 자리를 주소에 적어 둔다 (U6).
+   *
+   * 조회 조건이 아니므로 히스토리를 쌓지 않고 `replace` 로 덮어쓴다 — 뒤로가기가
+   * 지도 이동을 한 걸음씩 되감는 대신 상세 이전의 탐색 화면으로 돌아가게 둔다.
+   */
+  const rememberViewport = useCallback(
+    (viewport: MapViewport) => {
+      navigate(exploreHref({ ...state, viewport }), {
+        replace: true,
+        preventScrollReset: true,
+      });
     },
     [navigate, state],
   );
@@ -185,15 +231,37 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   // 지도를 못 띄우면 목록만으로 탐색할 수 있게 시트를 접히지 않게 한다 (U8).
   const effectiveSnap = mapStatus === "MAP_FAILED" && state.snap === "peek" ? "middle" : state.snap;
 
+  /**
+   * 범례는 두 자리에 산다 — 모바일은 시트 위(U1), 데스크톱은 지도 좌하단.
+   *
+   * 지도가 실패해도 그린다. 방문 규모 값과 기준 기간은 지도와 함께 죽지 않으며,
+   * 색을 못 칠하는 동안에는 이 카드가 시·군 방문 규모로 가는 입구가 된다.
+   * 관심도 캡션(시트 헤더)과는 끝까지 다른 블록에 둔다 (U15).
+   */
+  const legend = (
+    <MapLegend
+      status={mapStatus}
+      periodLabel={formatVisitPeriodShort(
+        regions?.periodStart ?? null,
+        regions?.periodEnd ?? null,
+      )}
+      onOpenRegions={() => openSheet("region")}
+    />
+  );
+
   return (
     <div className="relative h-dvh overflow-hidden lg:grid lg:h-dvh lg:grid-cols-[1fr_480px] lg:gap-0 lg:overflow-hidden">
-      <MapZone status={mapStatus} onRetry={() => revalidator.revalidate()}>
+      <MapZone status={mapStatus} onRetry={() => revalidator.revalidate()} legend={legend}>
         {kakaoAppKey ? (
           <MapView
             appKey={kakaoAppKey}
             places={data?.places ?? []}
+            regionCode={appliedRegion}
+            initialViewport={state.viewport}
+            initialBounds={state.bounds}
             onLoadStateChange={setMapLoad}
             onSearchThisArea={searchThisArea}
+            onViewportChange={rememberViewport}
           />
         ) : null}
         <TopBar state={state} regionLabel={regionLabel} onOpenSheet={openSheet} />
@@ -202,16 +270,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <BottomSheet
         snap={effectiveSnap}
         onSnapChange={setSnap}
-        // 지도가 안 뜨면 설명할 색도 없다. 범례를 남기면 실패 안내만 가린다.
-        legend={
-          mapStatus === "MAP_FAILED" ? null : (
-            <MapLegend
-              status={mapStatus}
-              periodLabel={formatVisitPeriod(regions?.periodStart ?? null, regions?.periodEnd ?? null)}
-              source={regions?.source ?? null}
-            />
-          )
-        }
+        legend={legend}
         header={<SheetHeader state={state} data={data} dropped={dropped} />}
       >
         {loading ? (
@@ -268,7 +327,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           data={regions}
           onClose={closeSheet}
           // 시·군을 고르면 지도 경계 조건은 지운다 — 두 범위가 겹치면 어느 쪽인지 알 수 없다.
-          onSelect={(regionCode) => applyFromSheet({ regionCode, bounds: null })}
+          onSelect={(regionCode) => applyFromSheet(withRegionCode(state, regionCode))}
         />
       ) : null}
 

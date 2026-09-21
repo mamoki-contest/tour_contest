@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Place } from "../lib/contract";
-import type { MapBounds } from "../lib/explore-params";
+import type { MapBounds, MapViewport } from "../lib/explore-params";
+import {
+  boundsFromCorners,
+  boundsOfPoints,
+  sheetCoverHeight,
+  visibleContainerRect,
+} from "../lib/map-viewport";
 import {
   loadKakaoMaps,
   type KakaoMap,
+  type KakaoMapsApi,
   type KakaoMarker,
 } from "../lib/kakao-map.client";
 
@@ -13,14 +20,40 @@ const GANGWON_BOUNDS = { swLat: 37.02, swLng: 127.05, neLat: 38.62, neLng: 129.4
 const GANGWON_CENTER = { lat: 37.8228, lng: 128.1555 };
 const GANGWON_LEVEL = 12;
 
+/** 경계를 맞출 때 가장자리에 두는 여백(px). 아래쪽만 시트가 덮는 만큼 따로 잡는다. */
+const EDGE_PADDING = 16;
+
 /**
- * 시트가 지도의 아래쪽을 덮는다. 그만큼 여백을 주지 않으면 강원도가 시트 뒤에 놓여
- * 화면에는 북쪽 바깥만 보인다. 데스크톱은 시트가 없으므로 여백도 없다.
+ * 프로그램이 지도를 옮긴 뒤 이벤트가 잦아들 때까지 무시할 시간(ms).
+ *
+ * 카카오맵은 `setBounds`·`setLevel` 에도 `zoom_changed` 를 쏜다. 걸러내지 않으면
+ * 시·군을 골라 지도가 이동한 것을 `사용자가 움직였다` 로 읽어 `이 지도 영역에서
+ * 검색` 버튼이 저절로 뜨고, 주소에 옮겨 간 자리가 적힌다.
  */
-function bottomPaddingForSheet(): number {
+const PROGRAMMATIC_QUIET_MS = 400;
+
+function isDesktopViewport(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(min-width: 1024px)").matches;
+}
+
+/**
+ * 시트가 지도를 덮는 높이.
+ *
+ * 그만큼 여백을 주지 않으면 강원도가 시트 뒤에 놓여 화면에는 북쪽 바깥만 보인다.
+ * 초기 맞춤과 조회 범위가 **같은 값**을 쓰게 한 곳에서 읽는다. 데스크톱은 시트가
+ * 옆 컬럼이므로 덮는 높이가 0이다.
+ */
+function currentSheetCover(): number {
   if (typeof window === "undefined") return 0;
-  if (window.matchMedia("(min-width: 1024px)").matches) return 0;
-  return Math.round(window.innerHeight * 0.55);
+  return sheetCoverHeight(window.innerHeight, isDesktopViewport());
+}
+
+function toKakaoBounds(maps: KakaoMapsApi, bounds: MapBounds) {
+  const latLngBounds = new maps.LatLngBounds();
+  latLngBounds.extend(new maps.LatLng(bounds.swLat, bounds.swLng));
+  latLngBounds.extend(new maps.LatLng(bounds.neLat, bounds.neLng));
+  return latLngBounds;
 }
 
 export type MapLoadState = "LOADING" | "READY" | "FAILED";
@@ -35,14 +68,29 @@ export type MapLoadState = "LOADING" | "READY" | "FAILED";
 export function MapView({
   appKey,
   places,
+  regionCode,
+  initialViewport,
+  initialBounds,
   onLoadStateChange,
   onSearchThisArea,
+  onViewportChange,
 }: {
   appKey: string;
   places: Place[];
+  /**
+   * 지금 목록에 **적용된** 시·군 코드. URL의 값이 아니라 로더가 실제로 조회한 값이다 —
+   * 조회가 끝나기 전에 옮기면 이전 시·군의 마커로 지도를 맞추게 된다.
+   */
+  regionCode: string | null;
+  /** 주소에 실려 온 지도 위치. 있으면 첫 맞춤이 이 값을 쓴다 (U6). */
+  initialViewport: MapViewport | null;
+  /** 주소에 실려 온 조회 경계. 위치가 없을 때의 차선책 — 조회 범위와 화면을 맞춘다. */
+  initialBounds: MapBounds | null;
   onLoadStateChange: (state: MapLoadState) => void;
   /** 사용자가 `이 지도 영역에서 검색`을 눌렀을 때 확정되는 경계. */
   onSearchThisArea: (bounds: MapBounds) => void;
+  /** 사용자가 지도를 옮길 때마다 주소에 적어 둘 위치. 조회는 다시 돌지 않는다. */
+  onViewportChange: (viewport: MapViewport) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -50,6 +98,42 @@ export function MapView({
   const [loadState, setLoadState] = useState<MapLoadState>("LOADING");
   /** 지도를 움직인 뒤에만 검색 버튼이 나타난다. */
   const [moved, setMoved] = useState(false);
+
+  /** 프로그램이 옮기는 중. 그동안의 지도 이벤트는 사용자의 몸짓이 아니다. */
+  const programmaticRef = useRef(0);
+
+  /** 콜백이 매 렌더 새로 오더라도 지도를 다시 만들지 않게 최신 값만 붙잡아 둔다. */
+  const viewportChangeRef = useRef(onViewportChange);
+  viewportChangeRef.current = onViewportChange;
+
+  /**
+   * 첫 렌더의 주소 상태. 지도 생성 효과는 `appKey` 에만 매달려 있으므로, 그 뒤에
+   * 바뀐 값이 아니라 **마운트 시점의 값**으로 첫 화면을 맞춰야 한다.
+   */
+  const initialRef = useRef({
+    viewport: initialViewport,
+    bounds: initialBounds,
+    regionCode,
+  });
+
+  /**
+   * 이미 지도를 맞춘 시·군. `undefined` 는 아직 한 번도 맞추지 않았다는 뜻이다.
+   *
+   * 주소가 지도 위치를 들고 왔다면(상세에서 뒤로 온 경우) 그 위치가 이긴다 — 사용자가
+   * 직접 옮겨 둔 화면을 시·군 기준으로 다시 잡아채지 않는다.
+   */
+  const fittedRegionRef = useRef<string | null | undefined>(
+    initialRef.current.viewport ? initialRef.current.regionCode : undefined,
+  );
+
+  /** 지도를 프로그램으로 옮긴다 — 그 사이에 오는 이벤트는 사용자의 것이 아니다. */
+  const moveProgrammatically = useCallback((move: () => void) => {
+    programmaticRef.current += 1;
+    move();
+    window.setTimeout(() => {
+      programmaticRef.current = Math.max(0, programmaticRef.current - 1);
+    }, PROGRAMMATIC_QUIET_MS);
+  }, []);
 
   useEffect(() => {
     onLoadStateChange(loadState);
@@ -68,15 +152,60 @@ export function MapView({
         });
         mapRef.current = map;
 
-        // 시트에 가리지 않는 위쪽 영역에 강원도가 들어오게 맞춘다.
-        const initial = new maps.LatLngBounds();
-        initial.extend(new maps.LatLng(GANGWON_BOUNDS.swLat, GANGWON_BOUNDS.swLng));
-        initial.extend(new maps.LatLng(GANGWON_BOUNDS.neLat, GANGWON_BOUNDS.neLng));
-        map.setBounds(initial, 16, 16, bottomPaddingForSheet(), 16);
+        const initial = initialRef.current;
+        const applyInitialView = () => {
+          if (initial.viewport) {
+            // 상세에서 뒤로 온 경우 — 떠날 때 보던 자리를 그대로 되살린다 (U6).
+            map.setCenter(new maps.LatLng(initial.viewport.lat, initial.viewport.lng));
+            map.setLevel(initial.viewport.level);
+          } else if (initial.bounds) {
+            // 조회 범위가 곧 사용자가 본 범위다 — 시트에 가리지 않는 쪽에 그대로 앉힌다.
+            map.setBounds(
+              toKakaoBounds(maps, initial.bounds),
+              EDGE_PADDING,
+              EDGE_PADDING,
+              currentSheetCover(),
+              EDGE_PADDING,
+            );
+          } else {
+            // 시트에 가리지 않는 위쪽 영역에 강원도가 들어오게 맞춘다.
+            map.setBounds(
+              toKakaoBounds(maps, GANGWON_BOUNDS),
+              EDGE_PADDING,
+              EDGE_PADDING,
+              currentSheetCover(),
+              EDGE_PADDING,
+            );
+          }
+        };
+        applyInitialView();
 
-        const onIdle = () => setMoved(true);
-        maps.event.addListener(map, "dragend", onIdle);
-        maps.event.addListener(map, "zoom_changed", onIdle);
+        /*
+         * 컨테이너 크기가 확정되기 전에 지도가 자리를 잡으면 되살린 위치가 몇 픽셀
+         * 어긋난다 — 지도는 처음 잰 크기로 중심을 계산해 두고, 그 뒤 컨테이너가
+         * 자라도 다시 재지 않는다. 레이아웃이 끝난 다음 프레임에 한 번만 다시 맞춘다.
+         * 이때 오는 지도 이벤트는 사용자의 몸짓이 아니므로 세지 않는다.
+         */
+        window.requestAnimationFrame(() => {
+          if (cancelled) return;
+          moveProgrammatically(() => {
+            map.relayout();
+            applyInitialView();
+          });
+        });
+
+        const onUserMove = () => {
+          if (programmaticRef.current > 0) return;
+          setMoved(true);
+          const center = map.getCenter();
+          viewportChangeRef.current({
+            lat: center.getLat(),
+            lng: center.getLng(),
+            level: map.getLevel(),
+          });
+        };
+        maps.event.addListener(map, "dragend", onUserMove);
+        maps.event.addListener(map, "zoom_changed", onUserMove);
 
         setLoadState("READY");
       })
@@ -90,7 +219,7 @@ export function MapView({
     return () => {
       cancelled = true;
     };
-  }, [appKey]);
+  }, [appKey, moveProgrammatically]);
 
   /** 마커는 목록과 같은 데이터를 쓴다 — 지도와 목록이 서로 다른 집합을 말하지 않게. */
   useEffect(() => {
@@ -117,6 +246,93 @@ export function MapView({
     };
   }, [places, loadState]);
 
+  /**
+   * 시·군을 새로 고르면 지도가 그리로 간다.
+   *
+   * 목록만 바뀌고 지도가 강원 전체에 머물면, 고른 시·군이 어디인지 지도에서 알 수 없다.
+   * 한 번 맞춘 시·군은 다시 맞추지 않는다 — 사용자가 그 뒤에 직접 옮긴 화면을
+   * 목록이 갱신될 때마다 되돌리지 않기 위해서다.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    const maps = typeof window !== "undefined" ? window.kakao?.maps : undefined;
+    if (!map || !maps || loadState !== "READY") return;
+    if (fittedRegionRef.current === regionCode) return;
+
+    if (regionCode === null) {
+      // 강원 전체로 되돌린 것뿐이다 — 보던 자리를 빼앗지 않는다.
+      fittedRegionRef.current = null;
+      return;
+    }
+
+    const focus = boundsOfPoints(
+      places
+        .filter((place) => place.coordinates !== null)
+        .map((place) => ({
+          lat: place.coordinates!.latitude,
+          lng: place.coordinates!.longitude,
+        })),
+    );
+    // 좌표가 하나도 없으면 경계를 지어내지 않는다. 다음 갱신을 기다린다.
+    if (!focus) return;
+
+    moveProgrammatically(() => {
+      map.setBounds(
+        toKakaoBounds(maps, focus),
+        EDGE_PADDING,
+        EDGE_PADDING,
+        currentSheetCover(),
+        EDGE_PADDING,
+      );
+    });
+    fittedRegionRef.current = regionCode;
+  }, [places, regionCode, loadState, moveProgrammatically]);
+
+  /**
+   * 사용자가 실제로 본 범위.
+   *
+   * `getBounds()` 는 컨테이너 전체를 말한다. 모바일에서는 바텀시트가 아래 55%를
+   * 덮으므로, 그대로 쓰면 한 번도 보인 적 없는 남쪽까지 조회 범위에 들어간다.
+   */
+  const visibleBounds = useCallback((): MapBounds | null => {
+    const map = mapRef.current;
+    const container = containerRef.current;
+    const maps = typeof window !== "undefined" ? window.kakao?.maps : undefined;
+    if (!map || !container || !maps) return null;
+
+    const rect = visibleContainerRect(
+      container.clientWidth,
+      container.clientHeight,
+      currentSheetCover(),
+    );
+
+    // 변환은 지도가 아니라 투영 객체가 쥐고 있다.
+    const projection = typeof map.getProjection === "function" ? map.getProjection() : null;
+    if (
+      projection &&
+      typeof projection.coordsFromContainerPoint === "function" &&
+      typeof maps.Point === "function"
+    ) {
+      const southWest = projection.coordsFromContainerPoint(
+        new maps.Point(rect.left, rect.bottom),
+      );
+      const northEast = projection.coordsFromContainerPoint(new maps.Point(rect.right, rect.top));
+      return boundsFromCorners(
+        { lat: southWest.getLat(), lng: southWest.getLng() },
+        { lat: northEast.getLat(), lng: northEast.getLng() },
+      );
+    }
+
+    // SDK가 변환을 내주지 않는 경우에만 컨테이너 전체로 돌아간다.
+    const bounds = map.getBounds();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    return boundsFromCorners(
+      { lat: sw.getLat(), lng: sw.getLng() },
+      { lat: ne.getLat(), lng: ne.getLng() },
+    );
+  }, []);
+
   return (
     <div className="absolute inset-0">
       <div ref={containerRef} className="h-full w-full" aria-label="강원 관광지 지도" role="application" />
@@ -126,17 +342,9 @@ export function MapView({
           <button
             type="button"
             onClick={() => {
-              const map = mapRef.current;
-              if (!map) return;
-              const bounds = map.getBounds();
-              const sw = bounds.getSouthWest();
-              const ne = bounds.getNorthEast();
-              onSearchThisArea({
-                swLat: sw.getLat(),
-                swLng: sw.getLng(),
-                neLat: ne.getLat(),
-                neLng: ne.getLng(),
-              });
+              const bounds = visibleBounds();
+              if (!bounds) return;
+              onSearchThisArea(bounds);
               setMoved(false);
             }}
             className="type-label-md inline-flex h-10 items-center rounded-lg bg-surface px-4 text-primary-strong shadow-float transition-colors duration-200"

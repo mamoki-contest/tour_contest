@@ -23,10 +23,19 @@ export type MapStatus =
 export function MapZone({
   status,
   onRetry,
+  legend,
   children,
 }: {
   status: MapStatus;
   onRetry?: () => void;
+  /**
+   * 방문 규모 범례 — **데스크톱 자리**.
+   *
+   * 모바일에서는 시트 바로 위에 붙어 함께 올라간다(U1, `bottom-sheet.tsx`). 데스크톱에는
+   * 시트가 없어 그 자리도 사라졌으므로 지도 좌하단에 고정한다. 지도가 실패해도 남는다 —
+   * 기준 기간과 시·군 방문 규모로 가는 입구는 지도와 함께 죽을 이유가 없다 (#24).
+   */
+  legend?: React.ReactNode;
   /** 지도 위에 뜨는 것들 — 상단 컴팩트 바, 이 지도 영역에서 검색 버튼. */
   children?: React.ReactNode;
 }) {
@@ -36,6 +45,14 @@ export function MapZone({
     <div className="absolute inset-0 bg-grey-100 lg:relative lg:inset-auto lg:h-full">
       {/* 조건 요약 줄이 먼저 온다 — 모바일에서는 지도 위에 떠 있고, 데스크톱에서는 맨 위에 흐른다. */}
       {children}
+
+      {legend ? (
+        // 하단 내비(고정 64px)가 데스크톱에서도 살아 있으므로 그 위에 앉힌다.
+        <div className="absolute bottom-[calc(64px+env(safe-area-inset-bottom)+24px)] left-6 z-10 hidden w-[280px] max-w-[calc(100%-3rem)] lg:block">
+          {legend}
+        </div>
+      ) : null}
+
       {status === "MAP_FAILED" ? (
         // 시트가 아래 절반을 덮으므로 위쪽(조건 요약 줄 아래)에 붙인다 — 가운데 정렬하면 시트 뒤로 숨는다.
         <div className="px-gutter pt-[calc(env(safe-area-inset-top)+72px)] lg:pt-24">
@@ -55,34 +72,31 @@ export function MapZone({
 /**
  * 방문 규모 범례 — 접히지 않는다.
  *
- * 색 구간·사선(정보 없음)·기준 기간·출처가 모두 들어간다. 사선 스와치를 상시 포함하는
- * 이유는 작은 지도에서 해칭이 잘 안 보이기 때문이다 (U16).
+ * 두 줄만 남긴다: 무엇의 규모인지 한 줄, 언제를 센 값인지 한 줄. 출처 이름과
+ * `지금 사람 수가 아니에요` 같은 해명은 화면마다 반복하지 않고 시·군 시트에서 한 번
+ * 말한다 (사용자 확정, 2026-09-21).
+ *
+ * 색 레이어가 없는 동안에는 카드가 **시·군 방문 규모로 가는 입구** 노릇을 한다 —
+ * 값은 탐색 범위 시트에 살아 있으므로 설명 대신 거기로 보낸다. 색 구간과 사선
+ * 스와치(U16)는 지도에 실제로 색이 깔릴 때만 그린다 — 없는 색의 설명은 설명이 아니다.
  */
 export function MapLegend({
   status,
   periodLabel,
-  source,
-  /** 지도 확대가 읍·면·동에 닿으면 색을 만들지 않는다 — 그 사실을 범례가 말한다. */
-  belowRegionLevel = false,
+  onOpenRegions,
 }: {
   status: MapStatus;
+  /** `2026.08.16 ~ 08.22 기준`. 모르면 줄을 만들지 않는다 — 빈 자리를 문구로 메우지 않는다. */
   periodLabel: string | null;
-  source: string | null;
-  belowRegionLevel?: boolean;
+  /** 탐색 범위 시트를 여는 동작. 없으면 카드가 값만 말하는 표시로 남는다. */
+  onOpenRegions?: () => void;
 }) {
-  return (
-    <div className="rounded-lg bg-surface p-3 shadow-float">
-      {status === "REGION_FILL_FAILED" ? (
-        <p className="type-caption text-grey-700">방문 규모를 불러오지 못했어요</p>
-      ) : status === "REGION_FILL_UNSUPPORTED" ? (
-        <p className="type-caption text-grey-700">
-          지도에는 아직 방문 규모 색이 없어요 — 시·군별 규모는 탐색 범위에서 볼 수 있어요
-        </p>
-      ) : belowRegionLevel ? (
-        <p className="type-caption text-grey-700">
-          이 확대 단계에는 방문 규모 색이 없어요 — 관광지 마커만 보여드려요
-        </p>
-      ) : (
+  const hasFill = status === "READY";
+  const shell = "block w-full rounded-lg bg-surface p-3 text-left shadow-float";
+
+  const body = (
+    <>
+      {hasFill ? (
         <>
           <div className="flex items-center gap-2">
             <span className="type-caption text-grey-600">적음</span>
@@ -92,8 +106,8 @@ export function MapLegend({
             <span className="h-3 w-5 rounded-[2px] bg-primary-strong" />
             <span className="type-caption text-grey-600">많음</span>
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            {/* 결측은 램프 밖의 표현 — 가장 옅은 색이 아니라 사선 해칭이다. */}
+          <div className="mt-2 mb-2 flex items-center gap-2">
+            {/* 결측은 램프 밖의 표현 — 가장 옅은 색이 아니라 사선 해칭이다 (U16). */}
             <span
               className="h-3 w-5 rounded-[2px] bg-grey-200"
               style={{
@@ -104,11 +118,24 @@ export function MapLegend({
             <span className="type-caption text-grey-600">정보 없음</span>
           </div>
         </>
-      )}
-      <p className="type-caption mt-2 text-grey-600">
-        {[source ?? "출처 없음", periodLabel ?? "기준 기간 없음"].join(" · ")}
+      ) : null}
+
+      <p className="type-label-md text-grey-800">
+        {hasFill || !onOpenRegions ? "시·군 방문 규모" : "시·군 방문 규모 보기"}
       </p>
-      <p className="type-caption text-grey-600">지역을 방문한 규모예요. 지금 사람 수가 아니에요.</p>
-    </div>
+      {periodLabel ? <p className="type-caption mt-1 text-grey-600">{periodLabel}</p> : null}
+    </>
+  );
+
+  if (!onOpenRegions) return <div className={shell}>{body}</div>;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpenRegions}
+      className={`${shell} transition-colors duration-200 hover:bg-grey-50`}
+    >
+      {body}
+    </button>
   );
 }

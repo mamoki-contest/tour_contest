@@ -34,11 +34,29 @@ export interface MapBounds {
   neLng: number;
 }
 
+/**
+ * 지도가 지금 보고 있는 자리 — 중심과 확대 단계.
+ *
+ * 조회 조건이 아니라 **화면 위치**다. 그런데도 URL에 싣는 이유는 U6 때문이다:
+ * 상세로 들어갔다 뒤로 오면 `MapView` 가 언마운트됐다가 다시 마운트되므로,
+ * 위치가 URL에 없으면 축척이 강원 전체로 되돌아간다. `bbox` 만으로는 모자란다 —
+ * 사용자가 확대만 하고 `이 지도 영역에서 검색` 을 누르지 않았을 때는 `bbox` 가
+ * 아예 없기 때문이다.
+ */
+export interface MapViewport {
+  lat: number;
+  lng: number;
+  /** 카카오맵 확대 단계. 작을수록 확대. */
+  level: number;
+}
+
 export interface ExploreState {
   /** 선택된 시·군 행정구역 코드. null이면 강원 전체. */
   regionCode: string | null;
   /** 확정된 지도 경계. null이면 시·군 선택 또는 강원 전체가 범위다. */
   bounds: MapBounds | null;
+  /** 지도가 보고 있는 자리. 조회에는 쓰지 않는다 — 뒤로가기가 축척을 되살리기 위한 것이다. */
+  viewport: MapViewport | null;
   /** 적용된 지원 테마. null이면 무테마. */
   theme: string | null;
   /** 자유 검색어 — 지원 테마로 정규화되지 않은 입력. */
@@ -56,6 +74,7 @@ export interface ExploreState {
 export const DEFAULT_EXPLORE_STATE: ExploreState = {
   regionCode: null,
   bounds: null,
+  viewport: null,
   theme: null,
   query: null,
   dateMode: "FLEXIBLE",
@@ -116,6 +135,55 @@ export function formatBounds(bounds: MapBounds): string {
     .join(",");
 }
 
+/** 카카오맵이 실제로 쓰는 확대 단계 범위. 밖의 값은 주소를 손댄 것이므로 버린다. */
+const MIN_MAP_LEVEL = 1;
+const MAX_MAP_LEVEL = 14;
+
+/** `c=lat,lng` 와 `z=level` 을 함께 읽는다. 하나라도 깨져 있으면 통째로 버린다. */
+export function parseViewport(center: string | null, level: string | null): MapViewport | null {
+  if (!center || !level) return null;
+  const parts = center.split(",").map(Number);
+  const parsedLevel = Number(level);
+  if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n))) return null;
+  if (!Number.isInteger(parsedLevel) || parsedLevel < MIN_MAP_LEVEL || parsedLevel > MAX_MAP_LEVEL) {
+    return null;
+  }
+  const [lat, lng] = parts;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng, level: parsedLevel };
+}
+
+export function formatViewportCenter(viewport: MapViewport): string {
+  return `${viewport.lat.toFixed(6)},${viewport.lng.toFixed(6)}`;
+}
+
+/**
+ * `이 지도 영역에서 검색` 이 확정하는 상태.
+ *
+ * 시·군 조건을 함께 지운다. 둘을 같이 두면 백엔드에서 AND 로 걸려 조회 범위가
+ * 어느 쪽도 아니게 되는데, 조건 칩은 시·군 이름만 말해 사용자가 그 사실을 알 수
+ * 없다. 반대 방향(`withRegionCode`)과 대칭이다.
+ */
+export function withMapBounds(state: ExploreState, bounds: MapBounds): ExploreState {
+  return { ...state, bounds, regionCode: null };
+}
+
+/**
+ * 시·군을 고르면 지도 경계 조건은 지운다 — `withMapBounds` 의 반대 방향.
+ *
+ * 새 시·군을 고르면 지도가 그리로 옮겨 가므로, 주소에 적어 둔 **옛 위치는 버린다.**
+ * 남겨 두면 상세에서 뒤로 왔을 때 고른 시·군이 아니라 고르기 전 자리로 되돌아간다.
+ * 강원 전체로 되돌릴 때는 지도를 움직이지 않으니 보던 자리도 그대로 둔다.
+ */
+export function withRegionCode(state: ExploreState, regionCode: string | null): ExploreState {
+  return {
+    ...state,
+    regionCode,
+    bounds: null,
+    viewport: regionCode === null ? state.viewport : null,
+  };
+}
+
 export function parseExploreState(params: URLSearchParams, now: Date = new Date()): ExploreState {
   const sortRaw = params.get("sort");
   const snapRaw = params.get("snap");
@@ -136,6 +204,7 @@ export function parseExploreState(params: URLSearchParams, now: Date = new Date(
   return {
     regionCode: text(params, "region"),
     bounds: parseBounds(text(params, "bbox")),
+    viewport: parseViewport(text(params, "c"), text(params, "z")),
     theme: text(params, "theme"),
     query: text(params, "q"),
     dateMode,
@@ -151,6 +220,10 @@ export function toSearchParams(state: ExploreState): URLSearchParams {
   const params = new URLSearchParams();
   if (state.regionCode) params.set("region", state.regionCode);
   if (state.bounds) params.set("bbox", formatBounds(state.bounds));
+  if (state.viewport) {
+    params.set("c", formatViewportCenter(state.viewport));
+    params.set("z", String(state.viewport.level));
+  }
   if (state.theme) params.set("theme", state.theme);
   if (state.query) params.set("q", state.query);
   if (state.dateMode !== DEFAULT_EXPLORE_STATE.dateMode) params.set("dateMode", state.dateMode);
@@ -166,7 +239,12 @@ export function exploreHref(state: ExploreState): string {
   return query ? `/?${query}` : "/";
 }
 
-/** 조건이 하나라도 걸려 있는지 — `초기화` 칩을 보일지 정한다. */
+/**
+ * 조건이 하나라도 걸려 있는지 — `초기화` 칩을 보일지 정한다.
+ *
+ * 지도 뷰포트(`viewport`)는 세지 않는다. 지도를 움직인 것은 조회 조건을 건 것이
+ * 아니어서, 그것만으로 `초기화` 가 나타나면 지울 조건이 없는데도 지우라고 권하는 셈이 된다.
+ */
 export function hasActiveConditions(state: ExploreState): boolean {
   return (
     state.regionCode !== null ||
