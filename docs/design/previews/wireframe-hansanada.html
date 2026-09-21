@@ -163,7 +163,7 @@
     <div class="grp">흐름 F1 · 무테마 발견</div>
     <button data-s="m1">1. 탐색 홈 · 로딩</button>
     <button data-s="m2">2. 탐색 홈 · 기본 (시트 중간)</button>
-    <button data-s="m3">3. 시트 펼침 · 덜 알려진 순</button>
+    <button data-s="m3">3. 시트 펼침 · 온라인 언급 적은 순</button>
 
     <div class="grp">흐름 F2 · 테마/검색</div>
     <button data-s="m4">4. 검색 시트 · 일반 검색</button>
@@ -183,7 +183,7 @@
     <button data-s="m12">12. 나만의 지도 · 빈 상태</button>
 
     <div class="grp">경계 표시</div>
-    <button data-s="m13">13. 첫 사용 안내 ⚠동작경계</button>
+    <button data-s="m13">13. 도움말 시트</button>
 
     <div class="grp">데스크톱</div>
     <button data-s="d1">14. 탐색 홈 · 2단</button>
@@ -240,7 +240,7 @@
           <div class="sf"><span>관광지 이름으로 찾기</span><span>🔍</span></div>
           <span class="cn" style="margin-top:6px">조건 요약 줄 — 각 칩이 해당 시트 입구 (U4) · 가로 스크롤 (U14)</span>
           <div class="condrow">
-            <span class="cond">강원 전체</span><span class="cond">무테마</span><span class="cond">날짜 미정</span><span class="cond">인기 많은 순</span><span class="cond reset">초기화</span>
+            <span class="cond">강원 전체</span><span class="cond">무테마</span><span class="cond">날짜 미정</span><span class="cond">온라인 언급 많은 순</span><span class="cond reset">초기화</span>
           </div>
         </div>
         <div class="mapcta"><span class="cn">region-search-button (지도 이동 후에만)</span>이 지도 영역에서 검색</div>
@@ -249,17 +249,17 @@
           <div class="t-s" style="font-weight:700;color:var(--ink)">지역 방문 규모</div>
           <div class="sc"><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i><i class="nodata"></i></div>
           <div class="t-s">적음 → 많음 · 사선 = 정보 없음 (U16)</div>
-          <div class="t-s">한국관광공사 · 2026-05~07 기준</div>
+          <div class="t-s">2026-05~07 기준</div>
         </div>
         <div class="sheet mid">
           <div class="handle"></div>
           <div class="shead">
             <div class="headrow">
               <div><span class="cn">section-heading</span><span class="t-m">이 지도 범위 24곳</span></div>
-              <div><span class="cn">sort-toggle</span><span class="seg"><span data-on>인기 많은 순</span><span>덜 알려진 순</span></span></div>
+              <div><span class="cn">sort-toggle</span><span class="seg"><span data-on>온라인 언급 많은 순</span><span>온라인 언급 적은 순</span></span></div>
             </div>
             <span class="cn" style="margin-top:6px">data-source-note — 접지 않음 (U3) · 지도 범례와 다른 블록 (U15)</span>
-            <div class="t-s">관광지 관심도는 내비게이션 목적지 집계예요. 실제 방문객 수가 아니에요 · 티맵 관광지 관심지점 · 2026-07 기준</div>
+            <div class="t-s">9월 21일 기준</div>
           </div>
           <div class="sbody">
             <span class="cn">place-card</span>
@@ -269,7 +269,7 @@
               <p class="ttl">주문진 해수욕장</p>
               <p class="addr">강원특별자치도 강릉시 주문진읍 해안로 1758</p>
               <span class="bdg quiet">이 장소 기준 한산</span><span class="bdg normal">해수욕장</span>
-              <p class="cap">9월 14일 · 이 장소의 30일 예측 중 낮은 편<br>한국관광공사 · 오늘 06:00 기준</p>
+              <p class="cap">9월 14일 · 이 장소의 30일 예측 중 낮은 편<br>오늘 06:00 기준</p>
             </div>
             <div class="card">
               <div class="thumb">사진</div>
@@ -277,7 +277,7 @@
               <p class="ttl">평창 대관령 삼양목장 하늘목장 전망대 산책로 입구 <span style="color:var(--faint)">← 긴 이름 2줄 말줄임</span></p>
               <p class="addr">강원특별자치도 평창군 대관령면 꽃밭양지길 458-23 일원</p>
               <span class="bdg busy">이 장소 기준 혼잡</span>
-              <p class="cap">한국관광공사 · 오늘 06:00 기준</p>
+              <p class="cap">오늘 06:00 기준</p>
             </div>
           </div>
         </div>
@@ -285,7 +285,7 @@
       </div>
     </section>
 
-    <!-- ---------- M3 펼침 + 덜 알려진 순 ---------- -->
+    <!-- ---------- M3 펼침 + 온라인 언급 적은 순 ---------- -->
     <section class="screen" id="m3" hidden>
       <div class="frame mob">
         <div class="map"><div class="grid"><div class="lv1"></div><div class="lv2"></div><div class="lv4"></div><div class="nodata"></div><div class="lv2"></div><div class="lv3"></div><div class="lv1"></div><div class="lv3"></div><div class="lv2"></div></div></div>
@@ -294,20 +294,20 @@
           <div class="shead">
             <div class="headrow">
               <div><span class="t-m">이 지도 범위 24곳</span></div>
-              <span class="seg"><span>인기 많은 순</span><span data-on>덜 알려진 순</span></span>
+              <span class="seg"><span>온라인 언급 많은 순</span><span data-on>온라인 언급 적은 순</span></span>
             </div>
-            <div class="t-s" style="margin-top:6px">관광지 관심도 · 티맵 관광지 관심지점 · 2026-07 기준</div>
+            <div class="t-s" style="margin-top:6px">9월 21일 기준</div>
           </div>
           <div class="sbody">
-            <div class="card"><p class="ttl">아홉사리계곡</p><p class="addr">홍천군 내면</p><span class="bdg quiet">이 장소 기준 한산</span><p class="cap">티맵 관심지점 · 2026-07 기준</p></div>
-            <div class="card"><p class="ttl">배후령 전망대</p><p class="addr">춘천시 신북읍</p><span class="bdg normal">이 장소 기준 보통</span><p class="cap">티맵 관심지점 · 2026-07 기준</p></div>
+            <div class="card"><p class="ttl">아홉사리계곡</p><p class="addr">홍천군 내면</p><span class="bdg quiet">이 장소 기준 한산</span><p class="cap">9월 21일 기준</p></div>
+            <div class="card"><p class="ttl">배후령 전망대</p><p class="addr">춘천시 신북읍</p><span class="bdg normal">이 장소 기준 보통</span><p class="cap">9월 21일 기준</p></div>
             <span class="cn">divider + 별도 구간 — 미산정은 정렬 구간 밖 (U17 · AC 위반 방지)</span>
             <div class="divider"></div>
             <div class="headrow" style="margin-bottom:8px">
-              <span class="t-m">관심도 미산정 6곳</span>
-              <span class="bdg nodata" style="margin:0">낮은 관심도 아님</span>
+              <span class="t-m">온라인 언급 정보 없음 6곳</span>
+              <span class="bdg nodata" style="margin:0">낮은 언급량이 아님</span>
             </div>
-            <div class="card"><p class="ttl">한섬해변</p><p class="addr">동해시 천곡동</p><span class="bdg nodata">관심도 미산정</span><span class="bdg nodata">예측 정보 없음</span><p class="cap">관심도 데이터가 없어요. 낮다는 뜻이 아니에요</p></div>
+            <div class="card"><p class="ttl">한섬해변</p><p class="addr">동해시 천곡동</p><span class="bdg nodata">언급 판정 보류</span><span class="bdg nodata">예측 정보 없음</span><p class="cap">9월 21일 기준</p></div>
           </div>
         </div>
         <div class="bnav"><div data-on>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
@@ -331,8 +331,8 @@
             <div class="box dash">
               <p class="t-s" style="margin:0">‘속초 조용한 카페’는 지원 테마가 아니에요. 관광 정보에서 찾은 <b style="color:var(--ink)">일반 검색 결과</b>라 테마 적합성이나 대체지 추천을 보증하지 않아요.</p>
             </div>
-            <div class="card" style="margin-top:12px"><p class="ttl">영금정</p><p class="addr">속초시 동명동</p><span class="bdg nodata">일반 검색 결과</span><p class="cap">KorService2 키워드 검색 · 2026-09-02</p></div>
-            <div class="card"><p class="ttl">속초해수욕장</p><p class="addr">속초시 조양동</p><span class="bdg nodata">일반 검색 결과</span><p class="cap">KorService2 키워드 검색 · 2026-09-02</p></div>
+            <div class="card" style="margin-top:12px"><p class="ttl">영금정</p><p class="addr">속초시 동명동</p><span class="bdg nodata">일반 검색 결과</span><p class="cap">2026-09-02 기준</p></div>
+            <div class="card"><p class="ttl">속초해수욕장</p><p class="addr">속초시 조양동</p><span class="bdg nodata">일반 검색 결과</span><p class="cap">2026-09-02 기준</p></div>
           </div>
         </div>
       </div>
@@ -368,7 +368,7 @@
       <div class="frame mob">
         <div class="map"><div class="grid"><div class="lv1"></div><div class="lv1"></div><div class="lv2"></div><div class="nodata"></div><div class="lv1"></div><div class="lv1"></div><div class="lv1"></div><div class="lv2"></div><div class="lv1"></div></div></div>
         <div class="topbar"><div class="sf"><span>관광지 이름으로 찾기</span><span>🔍</span></div>
-          <div class="condrow"><span class="cond">이 지도 영역</span><span class="cond">눈꽃</span><span class="cond">9/14</span><span class="cond">인기 많은 순</span><span class="cond reset">초기화</span></div>
+          <div class="condrow"><span class="cond">이 지도 영역</span><span class="cond">눈꽃</span><span class="cond">9/14</span><span class="cond">온라인 언급 많은 순</span><span class="cond reset">초기화</span></div>
         </div>
         <div class="sheet mid">
           <div class="handle"></div>
@@ -402,11 +402,11 @@
           <div class="handle"></div>
           <div class="shead">
             <span class="cn">지도 실패 → 시트가 <b>자동으로 펼침 스냅</b>으로 올라간다 (U8)</span>
-            <div class="headrow"><span class="t-m">최근 범위의 24곳</span><span class="seg"><span data-on>인기 많은 순</span><span>덜 알려진 순</span></span></div>
+            <div class="headrow"><span class="t-m">이 지도 범위 24곳</span><span class="seg"><span data-on>온라인 언급 많은 순</span><span>온라인 언급 적은 순</span></span></div>
           </div>
           <div class="sbody">
-            <div class="card"><p class="ttl">주문진 해수욕장</p><p class="addr">강릉시 주문진읍</p><span class="bdg quiet">이 장소 기준 한산</span><p class="cap">티맵 관심지점 · 2026-07 기준</p></div>
-            <div class="card"><p class="ttl">경포대</p><p class="addr">강릉시 저동</p><span class="bdg busy">이 장소 기준 혼잡</span><p class="cap">티맵 관심지점 · 2026-07 기준</p></div>
+            <div class="card"><p class="ttl">주문진 해수욕장</p><p class="addr">강릉시 주문진읍</p><span class="bdg quiet">이 장소 기준 한산</span><p class="cap">9월 21일 기준</p></div>
+            <div class="card"><p class="ttl">경포대</p><p class="addr">강릉시 저동</p><span class="bdg busy">이 장소 기준 혼잡</span><p class="cap">9월 21일 기준</p></div>
           </div>
         </div>
         <div class="bnav"><div data-on>탐색 홈</div><div>나만의 지도<span class="cnt">7</span></div></div>
@@ -423,7 +423,7 @@
             <span class="cn">place-detail-title — 말줄임 없음</span>
             <p class="t-l" style="margin:0">정동진 모래시계공원</p>
             <p class="t-s">강원특별자치도 강릉시 강동면 · 관광지</p>
-            <p class="t-s">한국관광공사 KorService2 · 2026-09-01 기준</p>
+            <p class="t-s">2026-09-01 기준</p>
           </div>
           <div class="gap48"></div>
           <div class="sect">
@@ -443,7 +443,7 @@
             <p class="t-s" style="color:var(--ink)"><i class="dot d2"></i>진입로 서행 · 평균 21km/h</p>
             <p class="t-s" style="color:var(--ink)"><i class="dot d3"></i>해안로 정체 · 평균 9km/h</p>
             <span class="bdg normal">주차 잔여 12면</span>
-            <p class="t-s">국가교통정보센터 · 오늘 14:20 조회<br><b style="color:var(--ink)">미래 날짜의 인파와는 다른 정보예요</b> (U20)</p>
+            <p class="t-s">오늘 14:20 조회</p>
           </div>
           <div class="gap48"></div>
           <div class="sect">
@@ -575,18 +575,18 @@
       </div>
     </section>
 
-    <!-- ---------- M13 첫 사용 안내 ---------- -->
+    <!-- ---------- M13 도움말 시트 ---------- -->
     <section class="screen" id="m13" hidden>
       <div class="frame mob">
         <div class="map"><div class="grid"><div class="lv1"></div><div class="lv2"></div><div class="lv4"></div><div class="nodata"></div><div class="lv2"></div><div class="lv3"></div><div class="lv1"></div><div class="lv3"></div><div class="lv2"></div></div></div>
         <div class="ovl" style="background:rgba(0,0,0,.35);justify-content:flex-end">
           <div style="background:var(--fill-0);border-top:2px solid var(--line);padding:20px">
-            <span class="cn">⚠동작경계 — ‘이미 봤음’ 플래그가 슬라이스 #9 스키마에 없다. 개발 체인 확인 필요 (R1)</span>
-            <p class="t-l" style="margin:0 0 12px">시작하기 전에<br>한 가지만요</p>
-            <div class="box"><p class="t-s" style="margin:0"><b style="color:var(--ink)">지도 색</b>은 그 지역에 <b style="color:var(--ink)">최근 몇 명이 다녀갔는지</b>예요. 지금 붐비는지가 아니에요.</p></div>
-            <div class="box"><p class="t-s" style="margin:0"><b style="color:var(--ink)">인기 순서</b>는 <b style="color:var(--ink)">내비게이션 목적지 집계</b>예요. 실제 방문객 수가 아니에요.</p></div>
+            <span class="cn">도움말 시트 ?sheet=help — 신호 설명이 모이는 한 자리 (R2·R3·R4 확정)</span>
+            <p class="t-l" style="margin:0 0 12px">이 화면의<br>정보들</p>
+            <div class="box"><p class="t-s" style="margin:0"><b style="color:var(--ink)">지도 색</b>은 그 <b style="color:var(--ink)">시·군</b>을 한 주 동안 찾은 방문자 수 추정치예요. 지금 붐비는지가 아니에요.</p></div>
+            <div class="box"><p class="t-s" style="margin:0"><b style="color:var(--ink)">온라인 언급</b>은 이름이 <b style="color:var(--ink)">온라인에서 얼마나 언급됐는지</b> 센 값이에요. 실제 방문객 수가 아니에요.</p></div>
             <div class="box"><p class="t-s" style="margin:0"><b style="color:var(--ink)">한산·혼잡</b>은 <b style="color:var(--ink)">그 장소 자기 기준</b>이에요. 다른 장소와 비교한 값이 아니에요.</p></div>
-            <div style="margin-top:16px"><span class="btn pri block">알겠어요</span></div>
+            <div style="margin-top:16px"><span class="btn pri block">닫기</span></div>
           </div>
         </div>
       </div>
@@ -608,16 +608,16 @@
               <div class="t-s" style="font-weight:700;color:var(--ink)">지역 방문 규모</div>
               <div class="sc"><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i><i class="nodata"></i></div>
               <div class="t-s">적음 → 많음 · 사선 = 정보 없음</div>
-              <div class="t-s">한국관광공사 · 2026-05~07 기준</div>
+              <div class="t-s">2026-05~07 기준</div>
             </div>
           </div>
           <div class="right">
             <span class="cn">우측 컬럼만 스크롤 · 최대 440px · 탐색 홈만 전폭 (D2)</span>
-            <div class="headrow"><span class="t-m">이 지도 범위 24곳</span><span class="seg"><span data-on>인기 많은 순</span><span>덜 알려진 순</span></span></div>
+            <div class="headrow"><span class="t-m">이 지도 범위 24곳</span><span class="seg"><span data-on>온라인 언급 많은 순</span><span>온라인 언급 적은 순</span></span></div>
             <div class="chips" style="margin:8px 0"><span class="chip">벚꽃</span><span class="chip">해수욕장</span><span class="chip">계곡</span><span class="chip">단풍</span><span class="chip">눈꽃</span></div>
-            <p class="t-s">관광지 관심도는 내비게이션 목적지 집계예요 · 티맵 관광지 관심지점 · 2026-07 기준</p>
+            <p class="t-s">9월 21일 기준</p>
             <div class="card"><div class="thumb">사진</div><div class="savebtn on">♥</div><p class="ttl">주문진 해수욕장</p><p class="addr">강릉시 주문진읍 해안로 1758</p><span class="bdg quiet">이 장소 기준 한산</span><p class="cap">9/14 · 30일 예측 중 낮은 편</p></div>
-            <div class="card"><div class="thumb">사진</div><div class="savebtn">♡</div><p class="ttl">경포대</p><p class="addr">강릉시 저동</p><span class="bdg busy">이 장소 기준 혼잡</span><p class="cap">한국관광공사 · 오늘 06:00 기준</p></div>
+            <div class="card"><div class="thumb">사진</div><div class="savebtn">♡</div><p class="ttl">경포대</p><p class="addr">강릉시 저동</p><span class="bdg busy">이 장소 기준 혼잡</span><p class="cap">오늘 06:00 기준</p></div>
           </div>
         </div>
       </div>
@@ -631,14 +631,14 @@
           <span class="cn">상세는 최대 1024px 중앙 1단 · 하단 고정 버튼 → 우측 상단으로 이동</span>
           <div class="hero" style="border:1px solid var(--line-soft)">사진 16:9</div>
           <p class="t-l" style="margin:12px 0 0">정동진 모래시계공원</p>
-          <p class="t-s">강원특별자치도 강릉시 강동면 · 관광지 · 한국관광공사 KorService2 · 2026-09-01 기준</p>
+          <p class="t-s">강원특별자치도 강릉시 강동면 · 관광지 · 2026-09-01 기준</p>
           <div class="gap48"></div>
           <p class="t-m">언제 갈까요</p>
           <div class="box"><span class="bdg quiet">9/14 · 이 장소 기준 한산</span><p class="qdate">9월 24일</p><p class="t-s" style="margin:0">이 장소에서 가장 한산한 편 · 오늘 06:00 기준</p></div>
           <div class="gap48"></div>
           <p class="t-m">지금 가는 길</p>
           <p class="t-s" style="color:var(--ink)"><i class="dot d1"></i>주변 도로 원활 · 평균 48km/h &nbsp;&nbsp; <i class="dot d2"></i>진입로 서행 · 21km/h</p>
-          <p class="t-s">국가교통정보센터 · 오늘 14:20 조회 · 미래 날짜의 인파와는 다른 정보예요</p>
+          <p class="t-s">오늘 14:20 조회</p>
           <div class="gap48"></div>
           <p class="t-m">대신 가볼 만한 곳 <span class="cn" style="display:inline">가로 스크롤 → 3열 그리드로 펼침</span></p>
           <div class="grid3">
@@ -655,8 +655,8 @@
 <script>
   var SCREENS = [
     ['m1','탐색 홈 · 로딩','/','스켈레톤으로 뼈대를 먼저 보여줍니다. 외부 API 대여섯 개를 기다리므로 스피너를 쓰면 화면이 계속 깜빡입니다.'],
-    ['m2','탐색 홈 · 기본 (시트 중간 스냅)','/','<b>F1 시작점.</b> 첫 진입 기본 상태 — 강원 전체 · 무테마 · 날짜 미정 · 인기 많은 순 (ADR-0005). 확인할 것: 조건 요약 줄(U4), 시트에 붙어 움직이는 범례(U1), 지도 범례와 목록 caption이 <b>다른 블록</b>에 있는지(U15).'],
-    ['m3','탐색 홈 · 시트 펼침 · 덜 알려진 순','/','정렬을 뒤집은 상태. 확인할 것: <b>관심도 미산정</b>이 정렬 구간이 아니라 divider 아래 별도 구간에 있는지(U17 · D7).'],
+    ['m2','탐색 홈 · 기본 (시트 중간 스냅)','/','<b>F1 시작점.</b> 첫 진입 기본 상태 — 강원 전체 · 무테마 · 날짜 미정 · 온라인 언급 많은 순 (ADR-0005). 확인할 것: 조건 요약 줄(U4), 시트에 붙어 움직이는 범례(U1), 지도 범례와 목록 caption이 <b>다른 블록</b>에 있는지(U15).'],
+    ['m3','탐색 홈 · 시트 펼침 · 온라인 언급 적은 순','/','정렬을 뒤집은 상태. 확인할 것: <b>언급 판정 보류</b>이 정렬 구간이 아니라 divider 아래 별도 구간에 있는지(U17 · D7).'],
     ['m4','검색 시트 · 일반 검색 결과','/?q=','<b>F2.</b> 테마 칩 8개가 지도 위가 아니라 여기 있습니다(D5 · U12). 확인할 것: 일반 검색 안내가 <b>결과 위에 고정</b>이고 자유 입력어가 칩 모양이 아닌지(U18).'],
     ['m5','날짜 시트 · 30일 캘린더','/?date=','<b>F3.</b> 확인할 것: 30일 밖 날짜가 <b>비활성</b>이라 애초에 못 고르는지(U10 · H5 에러 예방 — 사후 메시지가 아니라 구조로 막습니다).'],
     ['m6','탐색 홈 · 빈 결과','/','빈 상태가 <b>막다른 길이 아니라</b> 다음 행동 두 개를 줍니다.'],
@@ -666,7 +666,7 @@
     ['m10','저장 편집 시트','/places/:id/save','태그(알약)와 테마 칩(각진 모서리)이 <b>모양으로</b> 구분됩니다 — 사용자가 쓴 것과 시스템이 검증한 것.'],
     ['m11','나만의 지도 · 정상','/saved','탐색 홈과 같은 골격을 재사용하되(D8) 방문 규모 색이 <b>없습니다</b> — 개인 화면은 인기 순위를 나타내지 않습니다(ADR-0005).'],
     ['m12','나만의 지도 · 빈 상태','/saved','빈 지도를 보여주지 않고 화면 전체가 탐색 홈으로 가는 입구가 됩니다(ADR-0005 명시).'],
-    ['m13','첫 사용 안내 시트','/ (오버레이)','<b>⚠동작경계.</b> 내용은 PRD가 요구하지만 “이미 봤음” 플래그를 어디 저장할지는 정해진 바가 없습니다 — 개발 체인으로 넘깁니다(R1).'],
+    ['m13','도움말 시트','/?sheet=help','<b>신호 설명이 모이는 한 자리.</b> 화면 캡션은 기준 시점 한 줄만 남기고, 무엇을 센 값인지는 여기서 한 번 말합니다. 자동으로 뜨지 않고 시트 헤더 ⓘ로 엽니다 — 첫 사용은 ⓘ 옆 점 하나로만 알립니다(R2·R3·R4).'],
     ['d1','데스크톱 · 탐색 홈 2단','/','좌 지도 고정 · 우 목록만 스크롤. <b>탐색 홈만 전폭</b>입니다(D2).'],
     ['d2','데스크톱 · 상세 1024px 1단','/places/:id','상세는 중앙 1단. 가로 스크롤 카드가 3열 그리드로 펼쳐지고, 하단 고정 버튼은 우측 상단으로 갑니다.']
   ];
