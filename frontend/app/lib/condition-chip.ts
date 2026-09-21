@@ -1,3 +1,6 @@
+import { formatCalendarDate } from "./forecast-window";
+import type { DateMode } from "./explore-params";
+
 /**
  * 검색 조건 칩이 무엇이라고 말할지 (#43).
  *
@@ -25,4 +28,19 @@ export function searchConditionChip(theme: string | null, query: string | null):
   // 값에 `검색` 을 붙이지 않는다 — 그 말은 이미 라벨이 하고 있다.
   if (query) return { label: "검색", value: `'${query}'` };
   return { label: "테마", value: "무테마" };
+}
+
+/**
+ * 날짜 칩이 무엇이라고 말할지 (#53).
+ *
+ * 세 상태가 **칩에서 서로 달라야 한다.** 전에는 `한산한 날에 갈래요` 를 고른 화면도
+ * 첫 진입과 똑같이 `날짜 미정` 이라고 말했다 — 사용자가 고른 것을 칩이 부정하는데
+ * 카드에는 그 예측이 떠 있으니, 어느 쪽이 지금 걸린 조건인지 알 길이 없었다.
+ *
+ * @param date 확정 모드의 선택일 (YYYY-MM-DD). 다른 모드에서는 쓰지 않는다.
+ */
+export function dateConditionValue(dateMode: DateMode, date: string | null): string {
+  if (dateMode === "FIXED" && date) return formatCalendarDate(date);
+  if (dateMode === "FLEXIBLE") return "한산한 날";
+  return "날짜 미정";
 }

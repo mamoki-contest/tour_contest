@@ -13,8 +13,20 @@ import { isWithinForecastWindow } from "./forecast-window";
  */
 export type SortOrder = "MENTION_DESC" | "MENTION_ASC";
 
-/** 날짜 모드. 고정 모드에서만 선택일을 받는다. */
-export type DateMode = "FLEXIBLE" | "FIXED";
+/**
+ * 날짜 모드 세 가지 (#53).
+ *
+ * - `NONE` — **날짜 미정.** 첫 진입의 상태다. 카드에 예측 배지가 없고, 목록 조회에
+ *   `dateMode` 를 아예 보내지 않는다.
+ * - `FLEXIBLE` — 사용자가 `한산한 날에 갈래요` 를 고른 상태. 카드마다 한산 예상일.
+ * - `FIXED` — 사용자가 날짜를 고른 상태. 이 모드에서만 선택일을 받는다.
+ *
+ * 전에는 `NONE` 이 없어 기본값이 `FLEXIBLE` 이었다. 그래서 첫 진입 `/` 과 시트에서
+ * `한산한 날에 갈래요` 를 고른 결과가 **같은 주소·같은 화면**이었다 — 조건 칩은
+ * `날짜 미정` 이라고 말하는데 카드에는 한산 예상일이 떴다. 묻지도 않은 예측을
+ * 보여주는 것이라, 사용자가 무엇을 기준으로 보고 있는지 알 수 없었다.
+ */
+export type DateMode = "NONE" | "FLEXIBLE" | "FIXED";
 
 /** 시트 스냅 세 단계. 첫 진입은 중간(D4 사용자 확정). */
 export type SheetSnap = "peek" | "middle" | "full";
@@ -65,7 +77,7 @@ export interface ExploreState {
   /** 자유 검색어 — 지원 테마로 정규화되지 않은 입력. */
   query: string | null;
   dateMode: DateMode;
-  /** 고정 모드의 선택일 (YYYY-MM-DD). 유연 모드에서는 항상 null. */
+  /** 고정 모드의 선택일 (YYYY-MM-DD). 다른 두 모드에서는 항상 null. */
   date: string | null;
   sort: SortOrder;
   /**
@@ -87,7 +99,7 @@ export const DEFAULT_EXPLORE_STATE: ExploreState = {
   viewport: null,
   theme: null,
   query: null,
-  dateMode: "FLEXIBLE",
+  dateMode: "NONE",
   date: null,
   sort: "MENTION_DESC",
   page: 1,
@@ -231,18 +243,32 @@ export function parseExploreState(params: URLSearchParams, now: Date = new Date(
   const sortRaw = params.get("sort");
   const snapRaw = params.get("snap");
   const sheetRaw = params.get("sheet");
-  const requestedMode: DateMode = params.get("dateMode") === "FIXED" ? "FIXED" : "FLEXIBLE";
+  /*
+   * `dateMode` 가 없는 주소는 **날짜 미정**이다 (#53).
+   *
+   * 옛 주소 호환이 여기에 걸려 있다. `dateMode` 를 적지 않은 링크는 이미 공유되고
+   * 북마크됐는데, 그 주소들이 가리키던 화면은 `날짜 미정` 칩을 달고 있었다. 없음을
+   * `FLEXIBLE` 로 읽으면 그 링크들이 묻지도 않은 한산 예상일을 들고 열린다.
+   * 모르는 값도 같은 자리로 온다 — 주소를 손댄 값의 뜻을 지어내지 않는다.
+   */
+  const rawMode = params.get("dateMode");
+  const requestedMode: DateMode =
+    rawMode === "FIXED" ? "FIXED" : rawMode === "FLEXIBLE" ? "FLEXIBLE" : "NONE";
   const rawDate = text(params, "date");
 
-  // 유연 모드에 남은 날짜는 무시한다 — 두 모드가 같은 화면에서 섞이지 않게 한다.
+  // 확정 모드가 아닌 곳에 남은 날짜는 무시한다 — 세 모드가 같은 화면에서 섞이지 않게 한다.
   const date = requestedMode === "FIXED" && isUsableDate(rawDate, now) ? rawDate : null;
 
   /*
    * 쓸 수 없는 날짜를 버릴 때 모드도 함께 되돌린다. 모드만 `FIXED` 로 남으면 카드가
-   * 있지도 않은 선택일 수준을 찾다가 전부 `예측 정보 없음` 이 된다 — 날짜를 고르지
+   * 있지도 않은 선택일 수준을 찾다가 전부 예측 없는 카드가 된다 — 날짜를 고르지
    * 않은 것과 예측이 없는 것은 다른 말이다.
+   *
+   * 되돌아가는 자리는 `날짜 미정` 이다 (#13 의 날짜 조건 해제). 전에는 `FLEXIBLE` 로
+   * 떨어뜨렸는데, 그러면 날짜를 잃은 사용자에게 **고르지도 않은 다른 모드**의 예측을
+   * 내놓는 셈이었다.
    */
-  const dateMode: DateMode = requestedMode === "FIXED" && date === null ? "FLEXIBLE" : requestedMode;
+  const dateMode: DateMode = requestedMode === "FIXED" && date === null ? "NONE" : requestedMode;
 
   return {
     regionCode: text(params, "region"),
@@ -270,6 +296,13 @@ export function toSearchParams(state: ExploreState): URLSearchParams {
   }
   if (state.theme) params.set("theme", state.theme);
   if (state.query) params.set("q", state.query);
+  /*
+   * 날짜 미정은 기본값이라 적지 않고, **`FLEXIBLE` 은 적는다** (#53).
+   *
+   * 전에는 `FLEXIBLE` 이 기본값이어서 이 줄이 그 값을 지웠다. 그래서 시트에서
+   * `한산한 날에 갈래요` 를 고르고 나면 주소가 첫 진입과 똑같아졌다 — 사용자가
+   * 내린 선택이 주소에서 사라지니 공유해도, 새로고침해도 그 선택이 없었다.
+   */
   if (state.dateMode !== DEFAULT_EXPLORE_STATE.dateMode) params.set("dateMode", state.dateMode);
   if (state.dateMode === "FIXED" && state.date) params.set("date", state.date);
   if (state.sort !== DEFAULT_EXPLORE_STATE.sort) params.set("sort", state.sort);

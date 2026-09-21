@@ -132,6 +132,45 @@ describe("목록 조회", () => {
     ]);
   });
 
+  /*
+   * 날짜 상태가 목록 질의에 그대로 비친다 (#53).
+   *
+   * 날짜 미정은 `dateMode` 를 **보내지 않는** 것으로 말한다. 백엔드는 그 값이 비면
+   * 예측을 조회하지 않고 목록만 돌려주므로, 카드가 그리지도 않을 예측을 관광지마다
+   * 계산시키지 않는다 — 첫 진입이 가장 잦은 조회라 그 절감이 크다.
+   */
+  it("날짜 미정이면 `dateMode` 를 보내지 않는다 — 백엔드가 예측 조회를 건너뛴다 (#53)", async () => {
+    install({ items: [attraction("1", 10)], totalCount: 1 });
+    await fetchPlaceList(undefined, DEFAULT_EXPLORE_STATE);
+
+    const query = requestedQuery();
+    expect(requested[0]).toContain("/attractions");
+    expect(query.get("dateMode")).toBeNull();
+    expect(query.get("visitDate")).toBeNull();
+  });
+
+  it("한산한 날을 고르면 `dateMode=FLEXIBLE` 을 보낸다 — 날짜는 없다", async () => {
+    install({ items: [attraction("1", 10)], totalCount: 1 });
+    await fetchPlaceList(undefined, { ...DEFAULT_EXPLORE_STATE, dateMode: "FLEXIBLE" });
+
+    const query = requestedQuery();
+    expect(query.get("dateMode")).toBe("FLEXIBLE");
+    expect(query.get("visitDate")).toBeNull();
+  });
+
+  it("날짜를 고르면 그 날짜까지 함께 보낸다", async () => {
+    install({ items: [attraction("1", 10)], totalCount: 1 });
+    await fetchPlaceList(undefined, {
+      ...DEFAULT_EXPLORE_STATE,
+      dateMode: "FIXED",
+      date: "2026-09-24",
+    });
+
+    const query = requestedQuery();
+    expect(query.get("dateMode")).toBe("FIXED");
+    expect(query.get("visitDate")).toBe("2026-09-24");
+  });
+
   it("검색 입구에는 날짜 파라미터를 보내지 않는다 — 받지 않는 값이다 (tour_backend#98)", async () => {
     install({ items: [], totalCount: 0, resultType: "GENERAL_SEARCH" });
     await fetchPlaceList(undefined, {

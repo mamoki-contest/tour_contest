@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 
-import { searchConditionChip } from "../lib/condition-chip";
+import { dateConditionValue, searchConditionChip } from "../lib/condition-chip";
 import {
   DEFAULT_EXPLORE_STATE,
   exploreHref,
@@ -41,8 +41,8 @@ export function ConditionBar({
   onOpenDate?: () => void;
 }) {
   const searchChip = searchConditionChip(state.theme ?? normalizedTheme, state.query);
-  const dateLabel =
-    state.dateMode === "FIXED" && state.date ? formatChipDate(state.date) : "날짜 미정";
+  // 세 상태(`날짜 미정` · `한산한 날` · `9월 24일`)를 칩이 갈라 말한다 (#53).
+  const dateLabel = dateConditionValue(state.dateMode, state.date);
   const sortLabel = state.sort === "MENTION_DESC" ? "온라인 언급 많은 순" : "온라인 언급 적은 순";
 
   return (
@@ -109,15 +109,4 @@ function ConditionChip({
       {value}
     </button>
   );
-}
-
-/** 칩 안에서는 연도를 떨어뜨린다 — 향후 30일이라 월·일이면 충분하고 줄을 밀지 않는다. */
-function formatChipDate(date: string): string {
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return "날짜 미정";
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "long",
-    day: "numeric",
-    timeZone: "Asia/Seoul",
-  }).format(parsed);
 }

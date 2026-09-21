@@ -17,12 +17,19 @@ import {
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 /**
- * 날짜 시트 (슬라이스 #6).
+ * 날짜 시트 (슬라이스 #6 · #53).
  *
- * 두 모드가 묻는 것이 다르다:
+ * 고를 수 있는 것이 셋이고, 셋이 묻는 것이 다르다:
  * - `날짜가 정해졌어요` — 방문일을 고정하고, 각 장소가 **그 날짜를 자기 기준으로** 어떻게
  *   보는지 확인한다. 장소 추천이 사용자의 날짜를 바꾸지 않는다.
  * - `한산한 날에 갈래요` — 장소를 먼저 보고, 장소마다 상대적으로 한산한 예상일을 받는다.
+ * - `날짜 조건 없이 볼래요` — **첫 진입의 상태이자 돌아올 자리**다 (#53). 예측을 묻지
+ *   않으므로 카드에 배지가 없다. 이 선택지를 시트 안에 두는 이유는, 한 번 모드를 고른
+ *   뒤에 날짜 조건만 푸는 길이 `초기화`(다른 조건까지 함께 지운다)밖에 없었기 때문이다.
+ *
+ * 셋을 한 줄짜리 탭 셋으로 묶지 않았다. `날짜가 정해졌어요`·`한산한 날에 갈래요` 는
+ * 둘 다 **예측을 받는** 모드라 나란히 견주는 것이 맞지만, 조건 없음은 그 둘과 같은
+ * 층위가 아니다. 모바일 폭에서 8~9자 라벨 셋을 한 줄에 넣으면 글자가 접히기도 한다.
  *
  * 예측이 닿지 않는 날은 아예 그리지 않는다 — 고를 수 없는 것을 보여주고 나중에 막지
  * 않는다 (U10). 창의 끝은 **응답이 말한 날**이다 (#30 M3): 프론트가 혼자 센 30일은
@@ -66,16 +73,43 @@ export function DateSheet({
         </PrimaryButton>
       }
     >
-      <div role="group" aria-label="날짜 모드" className="flex gap-1 rounded-sm bg-grey-100 p-1">
-        <ModeOption selected={mode === "FIXED"} onSelect={() => setMode("FIXED")}>
-          날짜가 정해졌어요
-        </ModeOption>
-        <ModeOption selected={mode === "FLEXIBLE"} onSelect={() => setMode("FLEXIBLE")}>
-          한산한 날에 갈래요
-        </ModeOption>
+      <div role="group" aria-label="날짜 모드">
+        <div className="flex gap-1 rounded-sm bg-grey-100 p-1">
+          <ModeOption selected={mode === "FIXED"} onSelect={() => setMode("FIXED")}>
+            날짜가 정해졌어요
+          </ModeOption>
+          <ModeOption selected={mode === "FLEXIBLE"} onSelect={() => setMode("FLEXIBLE")}>
+            한산한 날에 갈래요
+          </ModeOption>
+        </div>
+
+        {/*
+          조건을 푸는 길. 고른 날짜도 함께 버린다 — 적용되지 않을 값을 들고 있지 않는다.
+
+          위 둘과 **같은 모양**을 쓰되 상자를 따로 둔다. 선택 표시(흰 면)가 셋 다 같아야
+          지금 무엇이 걸려 있는지 한눈에 보이고, 상자가 갈리면 이것이 예측을 받는 모드가
+          아니라는 것도 함께 읽힌다.
+        */}
+        <div className="mt-2 flex rounded-sm bg-grey-100 p-1">
+          <ModeOption
+            selected={mode === "NONE"}
+            onSelect={() => {
+              setMode("NONE");
+              setDate(null);
+            }}
+          >
+            날짜 조건 없이 볼래요
+          </ModeOption>
+        </div>
       </div>
 
-      {mode === "FLEXIBLE" ? (
+      {mode === "NONE" ? (
+        <div className="mt-6 rounded-xl bg-grey-50 p-5">
+          <p className="type-body-lg text-grey-700">
+            날짜 조건 없이 장소만 둘러봐요. 위에서 하나를 고르면 카드에 예측을 보여드려요.
+          </p>
+        </div>
+      ) : mode === "FLEXIBLE" ? (
         <div className="mt-6 rounded-xl bg-grey-50 p-5">
           <p className="type-body-lg text-grey-700">
             장소마다 한산할 것으로 보이는 날을 알려드려요.

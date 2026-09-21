@@ -112,11 +112,17 @@ function toListQuery(state: ExploreState): URLSearchParams {
   query.set("size", String(sizeFor(state.page)));
   query.set("sort", toBackendSort(state.sort));
 
-  // 날짜 모드를 보내야 항목마다 `visitTiming` 이 따라온다. 확정 모드만 날짜를 함께 보낸다.
+  /*
+   * 날짜 모드를 보내야 항목마다 `visitTiming` 이 따라온다. 확정 모드만 날짜를 함께 보낸다.
+   *
+   * **날짜 미정이면 아예 보내지 않는다** (#53). 백엔드는 `dateMode` 가 비면 예측을
+   * 조회하지 않고 목록만 돌려준다(백엔드 README 「날짜 탐색」) — 카드가 그리지도 않을
+   * 예측을 관광지마다 계산시키지 않는다. 첫 진입이 가장 잦은 조회라 그 절감이 크다.
+   */
   if (state.dateMode === "FIXED" && state.date) {
     query.set("dateMode", "FIXED");
     query.set("visitDate", state.date);
-  } else {
+  } else if (state.dateMode === "FLEXIBLE") {
     query.set("dateMode", "FLEXIBLE");
   }
 
