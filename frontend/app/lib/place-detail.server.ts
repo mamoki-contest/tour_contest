@@ -323,7 +323,14 @@ function toDetail(raw: unknown): PlaceDetail | null {
       source: text(detail.source),
       observedAt: text(detail.baseAt),
     },
-    interest: { value: null, status: "MISSING", source: null, observedAt: null },
+    /*
+     * 상세 응답에는 세 신호가 없다. 목록에서 본 값을 물려받지 않는다 — 없는 값이다.
+     * 언급량은 `COLLECTION_FAILED`(값을 얻지 못함)이지 `0건`이 아니고, TMAP·입장객도
+     * 미수록·미집계이지 낮은 순위나 `0명`이 아니다.
+     */
+    onlineMention: { status: "COLLECTION_FAILED", count: null, collectedAt: null, ruleVersion: null },
+    tmapRank: { status: "NOT_AVAILABLE", rank: null, period: null },
+    visitorStats: { status: "NOT_IMPORTED", count: null, period: null, countStatus: null },
     description: text(detail.overview),
     forecast: toForecast(detail),
     currentAccess: toCurrentAccess(detail),

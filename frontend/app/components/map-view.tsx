@@ -153,29 +153,46 @@ export function MapView({
         mapRef.current = map;
 
         const initial = initialRef.current;
-        if (initial.viewport) {
-          // 상세에서 뒤로 온 경우 — 떠날 때 보던 자리를 그대로 되살린다 (U6).
-          map.setCenter(new maps.LatLng(initial.viewport.lat, initial.viewport.lng));
-          map.setLevel(initial.viewport.level);
-        } else if (initial.bounds) {
-          // 조회 범위가 곧 사용자가 본 범위다 — 시트에 가리지 않는 쪽에 그대로 앉힌다.
-          map.setBounds(
-            toKakaoBounds(maps, initial.bounds),
-            EDGE_PADDING,
-            EDGE_PADDING,
-            currentSheetCover(),
-            EDGE_PADDING,
-          );
-        } else {
-          // 시트에 가리지 않는 위쪽 영역에 강원도가 들어오게 맞춘다.
-          map.setBounds(
-            toKakaoBounds(maps, GANGWON_BOUNDS),
-            EDGE_PADDING,
-            EDGE_PADDING,
-            currentSheetCover(),
-            EDGE_PADDING,
-          );
-        }
+        const applyInitialView = () => {
+          if (initial.viewport) {
+            // 상세에서 뒤로 온 경우 — 떠날 때 보던 자리를 그대로 되살린다 (U6).
+            map.setCenter(new maps.LatLng(initial.viewport.lat, initial.viewport.lng));
+            map.setLevel(initial.viewport.level);
+          } else if (initial.bounds) {
+            // 조회 범위가 곧 사용자가 본 범위다 — 시트에 가리지 않는 쪽에 그대로 앉힌다.
+            map.setBounds(
+              toKakaoBounds(maps, initial.bounds),
+              EDGE_PADDING,
+              EDGE_PADDING,
+              currentSheetCover(),
+              EDGE_PADDING,
+            );
+          } else {
+            // 시트에 가리지 않는 위쪽 영역에 강원도가 들어오게 맞춘다.
+            map.setBounds(
+              toKakaoBounds(maps, GANGWON_BOUNDS),
+              EDGE_PADDING,
+              EDGE_PADDING,
+              currentSheetCover(),
+              EDGE_PADDING,
+            );
+          }
+        };
+        applyInitialView();
+
+        /*
+         * 컨테이너 크기가 확정되기 전에 지도가 자리를 잡으면 되살린 위치가 몇 픽셀
+         * 어긋난다 — 지도는 처음 잰 크기로 중심을 계산해 두고, 그 뒤 컨테이너가
+         * 자라도 다시 재지 않는다. 레이아웃이 끝난 다음 프레임에 한 번만 다시 맞춘다.
+         * 이때 오는 지도 이벤트는 사용자의 몸짓이 아니므로 세지 않는다.
+         */
+        window.requestAnimationFrame(() => {
+          if (cancelled) return;
+          moveProgrammatically(() => {
+            map.relayout();
+            applyInitialView();
+          });
+        });
 
         const onUserMove = () => {
           if (programmaticRef.current > 0) return;
@@ -202,7 +219,7 @@ export function MapView({
     return () => {
       cancelled = true;
     };
-  }, [appKey]);
+  }, [appKey, moveProgrammatically]);
 
   /** 마커는 목록과 같은 데이터를 쓴다 — 지도와 목록이 서로 다른 집합을 말하지 않게. */
   useEffect(() => {
@@ -289,9 +306,17 @@ export function MapView({
       currentSheetCover(),
     );
 
-    if (typeof map.containerPointToLatLng === "function" && typeof maps.Point === "function") {
-      const southWest = map.containerPointToLatLng(new maps.Point(rect.left, rect.bottom));
-      const northEast = map.containerPointToLatLng(new maps.Point(rect.right, rect.top));
+    // 변환은 지도가 아니라 투영 객체가 쥐고 있다.
+    const projection = typeof map.getProjection === "function" ? map.getProjection() : null;
+    if (
+      projection &&
+      typeof projection.coordsFromContainerPoint === "function" &&
+      typeof maps.Point === "function"
+    ) {
+      const southWest = projection.coordsFromContainerPoint(
+        new maps.Point(rect.left, rect.bottom),
+      );
+      const northEast = projection.coordsFromContainerPoint(new maps.Point(rect.right, rect.top));
       return boundsFromCorners(
         { lat: southWest.getLat(), lng: southWest.getLng() },
         { lat: northEast.getLat(), lng: northEast.getLng() },

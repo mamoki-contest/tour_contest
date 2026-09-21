@@ -123,7 +123,13 @@ describe("목록 조회", () => {
   it("미산정 항목은 값이 없는 채로 온다 — 0으로 읽지 않는다 (#27)", async () => {
     install({ items: [attraction("1", 10), attraction("2", null)], totalCount: 2 });
     const result = await fetchPlaceList(undefined, DEFAULT_EXPLORE_STATE);
-    expect(result.ok && result.data.places.map((place) => place.interest.value)).toEqual([10, null]);
+    expect(
+      result.ok &&
+        result.data.places.map((place) => [place.onlineMention.status, place.onlineMention.count]),
+    ).toEqual([
+      ["COLLECTED", 10],
+      ["AMBIGUOUS", null],
+    ]);
   });
 
   it("검색 입구에는 날짜 파라미터를 보내지 않는다 — 받지 않는 값이다 (tour_backend#98)", async () => {
