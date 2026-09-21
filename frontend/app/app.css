@@ -5,11 +5,15 @@
   --font-sans: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont,
     system-ui, "Malgun Gothic", sans-serif;
 
-  --color-primary: #3182f6;
-  --color-primary-strong: #1b64da;
-  --color-primary-deep: #194aa6;
-  --color-primary-surface: #e8f3ff;
-  --color-primary-soft: #90c2ff;
+  /* 주요 타이틀 서체 — type-display · type-headline-lg · type-headline-md 만 쓴다.
+     본문·라벨·배지·숫자는 --font-sans 그대로다. @font-face 는 @theme 아래에 있다. */
+  --font-display: "Jua", var(--font-sans);
+
+  --color-primary: #014ca9;
+  --color-primary-strong: #013b84;
+  --color-primary-deep: #012b60;
+  --color-primary-surface: #e1eeff;
+  --color-primary-soft: #4899fe;
 
   --color-grey-900: #191f28;
   --color-grey-800: #333d4b;
@@ -41,18 +45,56 @@
   --shadow-float: 0 2px 10px rgba(0, 27, 55, 0.1), 0 3px 20px rgba(2, 32, 71, 0.05);
 }
 
-/* 타이포 스케일 — TDS 측정값. 자간은 건드리지 않는다. */
+/* 주요 타이틀 서체 — 배달의민족 주아체. 우아한형제들이 만들어 무료로 배포하는 글꼴이고,
+   폰트 파일의 name 테이블 nameID 13 이 라이선스를 직접 밝힌다:
+   "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+   저작권(nameID 0): Copyright (c) 2014 WOOWA BROTHERS Corporation(www.woowahan.com)
+   with Reserved Font Name "BM JUA". 배포처: http://font.woowahan.com/jua/
+
+   font-family 를 "BM JUA"/"BMJUA" 가 아니라 "Jua" 로 쓰는 이유 — OFL 은 포맷 변환도
+   Modified Version 으로 본다. 여기서 부르는 웹폰트는 공식 TTF 를 woff 로 바꾼 변환본이라
+   Reserved Font Name 을 내걸 수 없다. 같은 서체의 Google Fonts 배포본 이름인 "Jua" 를 쓴다.
+
+   파일은 버전 고정된 jsDelivr woff(413KB)를 쓴다. 공식 배포본은 TTF(1.45MB)·OTF(1.24MB)
+   두 가지뿐이고 plain HTTP 로만 받을 수 있어서, 제목 세 스케일에만 쓰는 서체에 1.45MB
+   바이너리를 넣거나 https 페이지에서 http 를 핫링크하는 쪽이 모두 맞지 않았다.
+   @1.0 태그라 immutable 로 캐시되고, Pretendard 도 이미 같은 CDN 에서 받고 있어
+   새 오리진이 늘지 않는다.
+   (더 나은 선택지: 공식 TTF 를 woff2 로 변환한 219KB 자체 호스팅본. 한글 11,172자를
+    전부 담고 용량도 절반이지만 레포에 바이너리를 넣는 일이라 사용자 승인이 필요하다.)
+
+   font-weight 를 `400 700` 범위로 선언한 것이 중요하다. 주아체는 단일 굵기라서
+   700 을 요청하면 브라우저가 합성 볼드(faux bold)를 만들어 획을 뭉갠다. 범위로 선언하면
+   700 요청도 이 페이스가 그대로 받아 합성이 일어나지 않고, 그러면서 아래 유틸리티의
+   font-weight: 700 은 살아 있어 폰트가 안 떠서 Pretendard 로 떨어질 때 굵기 700 이 유지된다. */
+@font-face {
+  font-family: "Jua";
+  /* 자체 호스팅 우선(219KB, 한글 11,172자 전부). 라이선스·출처는 public/fonts/OFL-Jua.txt.
+     CDN 은 같은 서체의 woff 폴백(버전 고정). */
+  src:
+    url("/fonts/Jua.woff2") format("woff2"),
+    url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/BMJUA.woff") format("woff");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 타이포 스케일 — TDS 측정값. 자간은 건드리지 않는다.
+   아래 셋만 주요 타이틀 서체(--font-display)를 쓴다. title-md 이하는 Pretendard. */
 @utility type-display {
+  font-family: var(--font-display);
   font-size: 30px;
   line-height: 40px;
   font-weight: 700;
 }
 @utility type-headline-lg {
+  font-family: var(--font-display);
   font-size: 24px;
   line-height: 33px;
   font-weight: 700;
 }
 @utility type-headline-md {
+  font-family: var(--font-display);
   font-size: 20px;
   line-height: 29px;
   font-weight: 700;
